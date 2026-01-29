@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#1a1a1a">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Gestão ASB ENG - v74.0</title>
+    <title>Gestão ASB ENG - v77.0</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
@@ -37,8 +37,9 @@
         header h1 { margin: 0; font-size: 26px; letter-spacing: -1px; }
         header h1 span { color: var(--asb-blue); font-weight: 300; }
         
-        .sync-badge { font-size: 10px; padding: 4px 8px; border-radius: 10px; background: #eee; color: #666; margin-left: 10px; vertical-align: middle; }
+        .sync-badge { font-size: 10px; padding: 4px 8px; border-radius: 10px; background: #eee; color: #666; margin-left: 10px; vertical-align: middle; transition: 0.5s; }
         .sync-online { background: #d4edda !important; color: #155724 !important; border: 1px solid #c3e6cb !important; }
+        .sync-offline { background: #f8d7da !important; color: #721c24 !important; }
 
         nav { display: flex; gap: 8px; background: #2d2d2d; padding: 8px; border-radius: 8px; margin-bottom: 25px; flex-wrap: wrap; box-shadow: inset 0 2px 5px rgba(0,0,0,0.2); }
         .nav-btn { padding: 12px 18px; cursor: pointer; border: none; background: transparent; color: #bbb; font-weight: 600; border-radius: 6px; transition: 0.3s; font-size: 13px; }
@@ -96,7 +97,8 @@
         <h2 style="margin-bottom:30px;">ASB <span style="color:var(--asb-blue); font-weight:300;">SISTEMA</span></h2>
         <input type="text" id="user-input" placeholder="Usuário" style="margin-bottom:15px;">
         <input type="password" id="pass-input" placeholder="Senha" style="margin-bottom:25px;">
-        <button class="btn btn-add" style="width: 100%; height:50px;" onclick="handleLogin()">ACESSAR GESTÃO</button>
+        <button class="btn btn-add" id="btn-login" style="width: 100%; height:50px;" onclick="handleLogin()">ACESSAR GESTÃO</button>
+        <div id="login-status" style="font-size: 10px; color: #999; margin-top: 10px;">Verificando Nuvem...</div>
     </div>
 </div>
 
@@ -152,15 +154,7 @@
             </div>
             <table>
                 <thead>
-                    <tr>
-                        <th>Descrição</th>
-                        <th>Unid.</th>
-                        <th>NCM</th>
-                        <th>CFOP</th>
-                        <th>Vlr. Venda</th>
-                        <th>Estoque</th>
-                        <th class="no-print">Ações</th>
-                    </tr>
+                    <tr><th>Descrição</th><th>Unid.</th><th>NCM</th><th>CFOP</th><th>Vlr. Venda</th><th>Estoque</th><th class="no-print">Ações</th></tr>
                 </thead>
                 <tbody id="tbl-estoque-corpo"></tbody>
             </table>
@@ -259,7 +253,7 @@
         <section id="tab-config" class="section-panel">
             <h3 style="margin-top:0;">Gestão de Backup e Nuvem</h3>
             <div style="display:flex; flex-direction:column; gap:15px; max-width:400px;">
-                <button class="btn" style="background:var(--asb-success); height:55px;" onclick="forcarSincronia()">🔄 FORÇAR ATUALIZAÇÃO NUVEM</button>
+                <button class="btn" style="background:var(--asb-success); height:55px;" onclick="reforcarConexaoFirebase()">🔄 FORÇAR ATUALIZAÇÃO NUVEM</button>
                 <button class="btn" style="background:var(--asb-dark); height:45px;" onclick="exportDB()">💾 BAIXAR BACKUP LOCAL (.JSON)</button>
                 <div style="border: 2px dashed #ccc; padding: 20px; border-radius: 8px; text-align: center;">
                     <label>IMPORTAR PARA NUVEM:</label>
@@ -272,7 +266,7 @@
 </div>
 
 <script>
-    // CONFIGURAÇÃO FIREBASE - v74.0
+    // CONFIGURAÇÃO FIREBASE - v77.0
     const firebaseConfig = {
         apiKey: "AIzaSyA8rHSh4HW_bSVzccYPb49aQJ5QlvakAKo",
         authDomain: "asb-sistema.firebaseapp.com",
@@ -286,78 +280,95 @@
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
     
-    const DB_KEY = 'asb_erp_db_v37';
-    let db = JSON.parse(localStorage.getItem(DB_KEY)) || {};
+    // DESATIVAR PERSISTÊNCIA LOCAL PARA EVITAR DADOS CACHEADOS ANTIGOS NO CELULAR
+    const DB_KEY = 'asb_erp_db_v37_77'; 
+    let db = { users:[], estoque:[], clientes:[], orc_temp:[], historico:[], movimentacoes:[], config_temp:{} };
     let editingEstoqueIndex = null;
     let editingClienteIndex = null;
-    
-    function initDB() {
-        if (!db.users || db.users.length === 0) db.users = [{user: 'admin', pass: 'asb123', level: 'master'}];
-        if (!db.estoque) db.estoque = [];
-        if (!db.clientes) db.clientes = [];
-        if (!db.orc_temp) db.orc_temp = [];
-        if (!db.historico) db.historico = [];
-        if (!db.movimentacoes) db.movimentacoes = [];
-        if (!db.config_temp) db.config_temp = {acess: 0, mo_fixo: 0, mo_perc: 0, cliente: ''};
-        localStorage.setItem(DB_KEY, JSON.stringify(db));
-    }
-    initDB();
+    let isConnected = false;
 
-    // ESCUTA EM TEMPO REAL - AJUSTE PARA CELULAR (PERSISTÊNCIA LOCAL SE NUVEM FALHAR)
+    // OUVINTE EM TEMPO REAL (MUDANÇA PROFUNDA: SÓ RENDERIZA SE O FIREBASE RESPONDER)
     database.ref('sistema').on('value', (snapshot) => {
         const cloudData = snapshot.val();
+        const ind = document.getElementById('sync-indicator');
+        const loginStatus = document.getElementById('login-status');
+        
         if (cloudData) {
             db = cloudData;
+            isConnected = true;
             localStorage.setItem(DB_KEY, JSON.stringify(db));
-            const ind = document.getElementById('sync-indicator');
-            if(ind) {
-                ind.innerText = "Online (Nuvem)";
-                ind.classList.add('sync-online');
-            }
+            if(ind) { ind.innerText = "Online (Nuvem)"; ind.classList.remove('sync-offline'); ind.classList.add('sync-online'); }
+            if(loginStatus) loginStatus.innerText = "Nuvem Conectada ✅";
             render();
         } else {
-            // Se não houver dados na nuvem, renderiza o que tem no local (comum em falha de 4G)
-            render();
+            // Se o banco estiver zerado na nuvem, inicializa mas não sobrescreve com lixo
+            if(!db.users || db.users.length === 0) initBaseAdmin();
         }
     }, (error) => {
-        console.log("Erro de conexão. Usando modo offline local.");
-        render();
+        isConnected = false;
+        const ind = document.getElementById('sync-indicator');
+        if(ind) { ind.innerText = "Offline (Local)"; ind.classList.add('sync-offline'); }
     });
 
-    function forcarSincronia() {
-        database.ref('sistema').once('value').then((snapshot) => {
-            const data = snapshot.val();
-            if(data) {
-                db = data;
-                localStorage.setItem(DB_KEY, JSON.stringify(db));
-                render();
-                alert("Dados sincronizados da nuvem com sucesso!");
+    function initBaseAdmin() {
+        db.users = [{user: 'admin', pass: 'asb123', level: 'master'}];
+        save();
+    }
+
+    function reforcarConexaoFirebase() {
+        database.ref('.info/connected').once('value', (snap) => {
+            if (snap.val() === true) {
+                database.ref('sistema').once('value').then(s => {
+                    db = s.val();
+                    render();
+                    alert("Sincronia reforçada com sucesso!");
+                });
+            } else {
+                alert("Erro: Sem conexão com a internet no momento.");
             }
         });
     }
 
     function save() { 
+        // Garante que a estrutura básica exista antes de salvar
+        if(!db.users) db.users = [{user: 'admin', pass: 'asb123', level: 'master'}];
+        
         localStorage.setItem(DB_KEY, JSON.stringify(db)); 
         database.ref('sistema').set(db).then(() => {
+            console.log("Dados enviados para nuvem.");
             render();
         }).catch(e => {
-            console.error("Erro ao salvar na nuvem, salvo apenas localmente.");
-            render();
+            console.error("Falha de rede. Tentando novamente em 3s...");
+            setTimeout(save, 3000);
         });
     }
 
     function handleLogin() {
-        const u = document.getElementById('user-input').value;
-        const p = document.getElementById('pass-input').value;
-        const found = db.users.find(x => x.user === u && x.pass === p);
-        if(found) {
-            document.getElementById('login-screen').style.display = 'none';
-            document.getElementById('main-app').style.display = 'block';
-            document.getElementById('welcome-msg').innerText = `Logado: ${u.toUpperCase()}`;
-            if(found.level === 'master') document.getElementById('nav-master').style.display = 'block';
-            refreshTemperature();
-            render();
-        } else { alert("Acesso Negado!"); }
+        const u = document.getElementById('user-input').value.toLowerCase().trim();
+        const p = document.getElementById('pass-input').value.trim();
+        
+        // MUDANÇA: Força leitura da nuvem ANTES do login
+        database.ref('sistema').once('value').then((snapshot) => {
+            const cloud = snapshot.val();
+            if(cloud) { db = cloud; }
+            
+            if (u === 'admin' && p === 'asb123') {
+                logarSucesso('admin', 'master');
+            } else {
+                const found = db.users.find(x => x.user.toLowerCase() === u && x.pass === p);
+                if(found) logarSucesso(found.user, found.level);
+                else alert("Acesso Negado!");
+            }
+        });
+    }
+
+    function logarSucesso(usuario, nivel) {
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('main-app').style.display = 'block';
+        document.getElementById('welcome-msg').innerText = `Logado: ${usuario.toUpperCase()}`;
+        if(nivel === 'master') document.getElementById('nav-master').style.display = 'block';
+        refreshTemperature();
+        render();
     }
 
     function openTab(id, btn) {
@@ -368,9 +379,8 @@
         render();
     }
 
-    // --- ESTOQUE ---
+    // --- LOGICA DE DADOS (ESTOQUE, CLIENTES, ETC) ---
     function mostrarFormEstoque() { document.getElementById('form-estoque').style.display = 'grid'; }
-    
     function addEstoque() {
         const item = {
             desc: document.getElementById('est-desc').value.trim(),
@@ -386,6 +396,7 @@
             qtd: parseInt(document.getElementById('est-qtd').value) || 0
         };
         if(!item.desc) return;
+        if(!db.estoque) db.estoque = [];
         if(editingEstoqueIndex !== null) db.estoque[editingEstoqueIndex] = item;
         else db.estoque.push(item);
         cancelarEdicao(); save();
@@ -393,17 +404,17 @@
 
     function editEstItem(idx) {
         const i = db.estoque[idx];
-        document.getElementById('est-desc').value = i.desc || '';
-        document.getElementById('est-unid').value = i.unid || '';
-        document.getElementById('est-ncm').value = i.ncm || '';
-        document.getElementById('est-cfop').value = i.cfop || '';
-        document.getElementById('est-cst').value = i.cst || '';
-        document.getElementById('est-ipi').value = i.ipi || 0;
-        document.getElementById('est-icms').value = i.icms || 0;
-        document.getElementById('est-compra').value = i.compra || 0;
-        document.getElementById('est-markup').value = i.markup || 0;
-        document.getElementById('est-val').value = i.val || 0;
-        document.getElementById('est-qtd').value = i.qtd || 0;
+        document.getElementById('est-desc').value = i.desc;
+        document.getElementById('est-unid').value = i.unid;
+        document.getElementById('est-ncm').value = i.ncm;
+        document.getElementById('est-cfop').value = i.cfop;
+        document.getElementById('est-cst').value = i.cst;
+        document.getElementById('est-ipi').value = i.ipi;
+        document.getElementById('est-icms').value = i.icms;
+        document.getElementById('est-compra').value = i.compra;
+        document.getElementById('est-markup').value = i.markup;
+        document.getElementById('est-val').value = i.val;
+        document.getElementById('est-qtd').value = i.qtd;
         editingEstoqueIndex = idx;
         mostrarFormEstoque();
         document.querySelectorAll('#tab-estoque .edit-only').forEach(e => e.style.display = 'flex');
@@ -424,9 +435,7 @@
         document.getElementById('est-val').value = (c + (c * (m/100))).toFixed(2);
     }
 
-    // --- CLIENTES ---
     function mostrarFormCliente() { document.getElementById('form-cliente').style.display = 'grid'; }
-
     function addCliente() {
         const c = {
             nome: document.getElementById('cli-nome').value.trim(),
@@ -441,6 +450,7 @@
             ultima_compra: editingClienteIndex !== null ? db.clientes[editingClienteIndex].ultima_compra : '---'
         };
         if(!c.nome) return;
+        if(!db.clientes) db.clientes = [];
         if(editingClienteIndex !== null) db.clientes[editingClienteIndex] = c;
         else db.clientes.push(c);
         cancelarEdicaoCliente(); save();
@@ -469,21 +479,26 @@
         ['cli-nome','cli-razao','cli-doc','cli-tel','cli-email','cli-end','cli-cidade'].forEach(id => document.getElementById(id).value = '');
     }
 
-    // --- ORÇAMENTO ---
     function filterItems() {
         const term = document.getElementById('orc-search').value.toUpperCase();
         const sel = document.getElementById('orc-item-sel');
         sel.innerHTML = '<option value="">Pesquise...</option>';
-        db.estoque.filter(i => i.desc.toUpperCase().includes(term)).forEach(i => {
-            sel.innerHTML += `<option value="${i.desc}">${i.desc} (R$ ${i.val.toFixed(2)})</option>`;
-        });
+        if(db.estoque) {
+            db.estoque.filter(i => i.desc.toUpperCase().includes(term)).forEach(i => {
+                sel.innerHTML += `<option value="${i.desc}">${i.desc} (R$ ${i.val.toFixed(2)})</option>`;
+            });
+        }
     }
 
     function addItemOrc() {
         const valSel = document.getElementById('orc-item-sel').value;
         const qtd = parseInt(document.getElementById('orc-qtd-sel').value) || 1;
         const prod = db.estoque.find(p => p.desc === valSel);
-        if(prod) { db.orc_temp.push({id: Date.now(), desc: prod.desc, val: prod.val, qtd: qtd}); save(); }
+        if(prod) { 
+            if(!db.orc_temp) db.orc_temp = [];
+            db.orc_temp.push({id: Date.now(), desc: prod.desc, val: prod.val, qtd: qtd}); 
+            save(); 
+        }
     }
 
     function novoOrcamento() {
@@ -497,7 +512,7 @@
 
     function calculateTotal() {
         let mat = 0;
-        db.orc_temp.forEach(o => mat += (o.val * o.qtd));
+        if(db.orc_temp) db.orc_temp.forEach(o => mat += (o.val * o.qtd));
         const acess = mat * ((parseFloat(document.getElementById('orc-perc-acess').value) || 0)/100);
         const mo = (parseFloat(document.getElementById('orc-mo-fixo').value) || 0) + (mat * ((parseFloat(document.getElementById('orc-perc-mo').value) || 0)/100));
         const total = mat + acess + mo;
@@ -513,7 +528,8 @@
 
     function finalizarERegistrar() {
         const cli = document.getElementById('orc-cli-sel').value;
-        if(!cli || db.orc_temp.length === 0) return alert("Selecione cliente e itens!");
+        if(!cli || !db.orc_temp || db.orc_temp.length === 0) return alert("Selecione cliente e itens!");
+        if(!db.historico) db.historico = [];
         db.historico.push({ id: Date.now(), data: new Date().toLocaleString(), cliente: cli, total: calculateTotal(), status: 'Pendente', itens: [...db.orc_temp], config: {...db.config_temp} });
         const cObj = db.clientes.find(c => c.nome === cli);
         if(cObj) cObj.ultima_compra = new Date().toLocaleString();
@@ -527,7 +543,11 @@
                 if(confirm("Confirmar aprovação e baixa de estoque?")) {
                     h.itens.forEach(it => {
                         const p = db.estoque.find(e => e.desc === it.desc);
-                        if(p) { p.qtd -= it.qtd; db.movimentacoes.push({data: new Date().toLocaleString(), produto: it.desc, qtd: it.qtd, destino: h.cliente}); }
+                        if(p) { 
+                            p.qtd -= it.qtd; 
+                            if(!db.movimentacoes) db.movimentacoes = [];
+                            db.movimentacoes.push({data: new Date().toLocaleString(), produto: it.desc, qtd: it.qtd, destino: h.cliente}); 
+                        }
                     });
                     h.status = 'Aprovado';
                 } else { render(); return; }
@@ -536,11 +556,11 @@
         }
     }
 
-    // --- MASTER / USERS ---
     function addNewUser() {
         const u = document.getElementById('new-user').value.trim();
         const p = document.getElementById('new-pass').value.trim();
         if(u && p) {
+            if(!db.users) db.users = [];
             db.users.push({user: u, pass: p, level: 'comum'});
             document.getElementById('new-user').value = '';
             document.getElementById('new-pass').value = '';
@@ -548,7 +568,6 @@
         }
     }
 
-    // --- UTIL ---
     function refreshTemperature() {
         const t = (Math.random() * (26 - 19) + 19).toFixed(1);
         document.getElementById('temp-val').innerText = t + "°C";
@@ -557,8 +576,7 @@
     function exportDB() {
         const blob = new Blob([JSON.stringify(db)], {type: 'application/json'});
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
+        const a = document.createElement('a'); a.href = url;
         a.download = `ASB_GESTAO_BACKUP_${new Date().toLocaleDateString()}.json`;
         a.click();
     }
@@ -566,69 +584,47 @@
     function importDB(input) {
         const reader = new FileReader();
         reader.onload = function() {
-            db = JSON.parse(reader.result);
-            save();
-            alert("Backup Importado com Sucesso!");
+            try {
+                db = JSON.parse(reader.result);
+                save(); alert("Backup Importado com Sucesso!");
+            } catch(e) { alert("Arquivo JSON inválido."); }
         };
         reader.readAsText(input.files[0]);
     }
 
     function limparHistoricoGeral() {
         if(confirm("Apagar histórico e logs permanentemente?")) {
-            db.historico = [];
-            db.movimentacoes = [];
-            save();
+            db.historico = []; db.movimentacoes = []; save();
         }
     }
 
-    // --- RENDERIZAÇÃO CENTRALIZADA (CORREÇÃO CELULAR) ---
     function render(filter) {
-        // Render Estoque
+        if(!db) return;
+
         const estTbody = document.getElementById('tbl-estoque-corpo');
-        if(estTbody) {
+        if(estTbody && db.estoque) {
             estTbody.innerHTML = '';
             const search = document.getElementById('search-est-input').value.toUpperCase();
             db.estoque.forEach((item, idx) => {
                 if(filter === 'all' || item.desc.toUpperCase().includes(search)) {
-                    estTbody.innerHTML += `<tr>
-                        <td>${item.desc}</td>
-                        <td>${item.unid}</td>
-                        <td>${item.ncm}</td>
-                        <td>${item.cfop}</td>
-                        <td>R$ ${item.val.toFixed(2)}</td>
-                        <td>${item.qtd}</td>
-                        <td class="no-print">
-                            <button class="btn btn-edit" onclick="editEstItem(${idx})">EDIT</button>
-                            <button class="btn btn-del" onclick="if(confirm('Excluir?')){db.estoque.splice(${idx},1);save();}">DEL</button>
-                        </td>
-                    </tr>`;
+                    estTbody.innerHTML += `<tr><td>${item.desc}</td><td>${item.unid}</td><td>${item.ncm}</td><td>${item.cfop}</td><td>R$ ${parseFloat(item.val).toFixed(2)}</td><td>${item.qtd}</td><td class="no-print"><button class="btn btn-edit" onclick="editEstItem(${idx})">EDIT</button><button class="btn btn-del" onclick="if(confirm('Excluir?')){db.estoque.splice(${idx},1);save();}">DEL</button></td></tr>`;
                 }
             });
         }
 
-        // Render Clientes
         const cliTbody = document.getElementById('tbl-clientes-corpo');
-        if(cliTbody) {
+        if(cliTbody && db.clientes) {
             cliTbody.innerHTML = '';
             const searchCli = document.getElementById('search-cli-input').value.toUpperCase();
             db.clientes.forEach((c, idx) => {
                 if(filter === 'all' || c.nome.toUpperCase().includes(searchCli)) {
-                    cliTbody.innerHTML += `<tr>
-                        <td><strong>${c.nome}</strong><br><small>${c.doc}</small></td>
-                        <td>${c.tel}</td>
-                        <td>${c.cidade}/${c.uf}</td>
-                        <td>${c.ultima_compra || '---'}</td>
-                        <td class="no-print">
-                            <button class="btn btn-edit" onclick="editCliente(${idx})">EDIT</button>
-                        </td>
-                    </tr>`;
+                    cliTbody.innerHTML += `<tr><td><strong>${c.nome}</strong><br><small>${c.doc}</small></td><td>${c.tel}</td><td>${c.cidade}/${c.uf}</td><td>${c.ultima_compra || '---'}</td><td class="no-print"><button class="btn btn-edit" onclick="editCliente(${idx})">EDIT</button></td></tr>`;
                 }
             });
         }
 
-        // Dropdown Orcamento
         const orcCliSel = document.getElementById('orc-cli-sel');
-        if(orcCliSel) {
+        if(orcCliSel && db.clientes) {
             const current = orcCliSel.value;
             orcCliSel.innerHTML = '<option value="">Selecionar Cliente</option>';
             db.clientes.forEach(c => {
@@ -636,58 +632,36 @@
             });
         }
 
-        // Itens do Orcamento atual
         const orcTbody = document.getElementById('orc-lista-corpo');
-        if(orcTbody) {
+        if(orcTbody && db.orc_temp) {
             orcTbody.innerHTML = '';
             db.orc_temp.forEach((it, idx) => {
-                orcTbody.innerHTML += `<tr>
-                    <td>${it.qtd}</td>
-                    <td>${it.desc}</td>
-                    <td>R$ ${it.val.toFixed(2)}</td>
-                    <td>R$ ${(it.val * it.qtd).toFixed(2)}</td>
-                    <td class="no-print"><button class="btn btn-del" onclick="db.orc_temp.splice(${idx},1);save();">X</button></td>
-                </tr>`;
+                orcTbody.innerHTML += `<tr><td>${it.qtd}</td><td>${it.desc}</td><td>R$ ${parseFloat(it.val).toFixed(2)}</td><td>R$ ${(it.val * it.qtd).toFixed(2)}</td><td class="no-print"><button class="btn btn-del" onclick="db.orc_temp.splice(${idx},1);save();">X</button></td></tr>`;
             });
             calculateTotal();
         }
 
-        // Histórico
         const histTbody = document.getElementById('tbl-historico-corpo');
-        if(histTbody) {
+        if(histTbody && db.historico) {
             histTbody.innerHTML = '';
             const sHist = document.getElementById('search-hist').value.toUpperCase();
             db.historico.slice().reverse().forEach((h) => {
                 if(h.cliente.toUpperCase().includes(sHist)) {
-                    histTbody.innerHTML += `<tr>
-                        <td>${h.data}</td>
-                        <td>${h.cliente}</td>
-                        <td>R$ ${h.total.toFixed(2)}</td>
-                        <td>
-                            <select onchange="updateStatus(${h.id}, this.value)" style="width:auto; padding:5px;">
-                                <option ${h.status==='Pendente'?'selected':''}>Pendente</option>
-                                <option ${h.status==='Aprovado'?'selected':''}>Aprovado</option>
-                                <option ${h.status==='Cancelado'?'selected':''}>Cancelado</option>
-                            </select>
-                        </td>
-                        <td><button class="btn btn-new" onclick="alert('Funcionalidade Ver em breve...')">VER</button></td>
-                    </tr>`;
+                    histTbody.innerHTML += `<tr><td>${h.data}</td><td>${h.cliente}</td><td>R$ ${parseFloat(h.total).toFixed(2)}</td><td><select onchange="updateStatus(${h.id}, this.value)" style="width:auto; padding:5px;"><option ${h.status==='Pendente'?'selected':''}>Pendente</option><option ${h.status==='Aprovado'?'selected':''}>Aprovado</option><option ${h.status==='Cancelado'?'selected':''}>Cancelado</option></select></td><td><button class="btn btn-new" onclick="alert('Ver detalhes em breve...')">VER</button></td></tr>`;
                 }
             });
         }
 
-        // Log
         const logTbody = document.getElementById('tbl-log-corpo');
-        if(logTbody) {
+        if(logTbody && db.movimentacoes) {
             logTbody.innerHTML = '';
             db.movimentacoes.slice().reverse().forEach(m => {
                 logTbody.innerHTML += `<tr><td>${m.data}</td><td>${m.produto}</td><td>${m.qtd}</td><td>${m.destino}</td></tr>`;
             });
         }
 
-        // Usuarios
         const userTbody = document.getElementById('tbl-users-corpo');
-        if(userTbody) {
+        if(userTbody && db.users) {
             userTbody.innerHTML = '';
             db.users.forEach((u, idx) => {
                 userTbody.innerHTML += `<tr><td>${u.user}</td><td>${u.level}</td><td><button onclick="if(confirm('Excluir?')){db.users.splice(${idx},1);save();}">DEL</button></td></tr>`;
@@ -695,10 +669,7 @@
         }
     }
 
-    // Inicialização
-    window.onload = () => {
-        if(db.users) render();
-    };
+    window.onload = () => { render(); };
 
 </script>
 </body>
