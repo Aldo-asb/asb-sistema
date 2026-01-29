@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#1a1a1a">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Gestão ASB ENG - v77.0</title>
+    <title>Gestão ASB ENG - v79.0</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
@@ -98,7 +98,7 @@
         <input type="text" id="user-input" placeholder="Usuário" style="margin-bottom:15px;">
         <input type="password" id="pass-input" placeholder="Senha" style="margin-bottom:25px;">
         <button class="btn btn-add" id="btn-login" style="width: 100%; height:50px;" onclick="handleLogin()">ACESSAR GESTÃO</button>
-        <div id="login-status" style="font-size: 10px; color: #999; margin-top: 10px;">Verificando Nuvem...</div>
+        <div id="login-status" style="font-size: 10px; color: #999; margin-top: 10px;">Verificando conexão...</div>
     </div>
 </div>
 
@@ -106,7 +106,7 @@
     <div class="container">
         <header>
             <div class="logo">
-                <h1>ASB <span>AUTOMAÇÃO</span> <span id="sync-indicator" class="sync-badge">Conectando...</span></h1>
+                <h1>ASB <span>AUTOMAÇÃO</span> <span id="sync-indicator" class="sync-badge">Sincronizando...</span></h1>
                 <div style="font-size: 12px; color: #666; margin-top: 5px;">
                     Temperatura: <span id="temp-val">--°C</span>
                     <button class="temp-refresh-btn no-print" onclick="refreshTemperature()">ATUALIZAR ⚙️</button>
@@ -165,7 +165,6 @@
                 <button class="btn btn-new" onclick="mostrarFormCliente()">NOVO CLIENTE</button>
                 <input type="text" id="search-cli-input" placeholder="🔍 Buscar cliente..." onkeyup="render()">
                 <button class="btn" style="background:var(--asb-dark)" onclick="render('all')">VER TODOS</button>
-                <button class="btn" style="background:var(--asb-blue)" onclick="window.print()">🖨️ IMPRIMIR LISTA</button>
             </div>
             <div class="form-grid" id="form-cliente">
                 <div class="field-group"><label>Nome Fantasia</label><input type="text" id="cli-nome"></div>
@@ -176,7 +175,7 @@
                 <div class="field-group"><label>E-mail</label><input type="email" id="cli-email"></div>
                 <div class="field-group"><label>Endereço</label><input type="text" id="cli-end"></div>
                 <div class="field-group"><label>Cidade</label><input type="text" id="cli-cidade"></div>
-                <div class="field-group"><label>Estado</label><select id="cli-uf"><option>GO</option><option>DF</option><option>SP</option><option>MG</option></select></div>
+                <div class="field-group"><label>Estado</label><select id="cli-uf"><option>GO</option><option>DF</option><option>SP</option><option>MG</option><option>RJ</option><option>PR</option></select></div>
                 <div class="form-actions-column">
                     <button class="btn btn-add" id="btn-save-cli" onclick="addCliente()">SALVAR</button>
                     <button class="btn btn-new" onclick="cancelarEdicaoCliente()">CANCELAR</button>
@@ -239,7 +238,7 @@
         </section>
 
         <section id="tab-master" class="section-panel">
-            <div class="form-grid" style="display:grid;">
+            <div class="form-grid" style="display:grid; grid-template-columns: 1fr 1fr 1fr;">
                 <input type="text" id="new-user" placeholder="Usuário">
                 <input type="password" id="new-pass" placeholder="Senha">
                 <button class="btn btn-add" onclick="addNewUser()">CADASTRAR</button>
@@ -253,11 +252,11 @@
         <section id="tab-config" class="section-panel">
             <h3 style="margin-top:0;">Gestão de Backup e Nuvem</h3>
             <div style="display:flex; flex-direction:column; gap:15px; max-width:400px;">
-                <button class="btn" style="background:var(--asb-success); height:55px;" onclick="reforcarConexaoFirebase()">🔄 FORÇAR ATUALIZAÇÃO NUVEM</button>
+                <button class="btn" style="background:var(--asb-success); height:55px;" onclick="forceRealtimeSync()">🔄 RECONECTAR CANAL DE DADOS</button>
                 <button class="btn" style="background:var(--asb-dark); height:45px;" onclick="exportDB()">💾 BAIXAR BACKUP LOCAL (.JSON)</button>
                 <div style="border: 2px dashed #ccc; padding: 20px; border-radius: 8px; text-align: center;">
                     <label>IMPORTAR PARA NUVEM:</label>
-                    <input type="file" accept=".json" onchange="importDB(this)">
+                    <input type="file" id="import-file" accept=".json" onchange="importDB(this)">
                 </div>
                 <button class="btn btn-del" style="height:45px;" onclick="limparHistoricoGeral()">⚠️ LIMPAR HISTÓRICO E LOGS</button>
             </div>
@@ -266,7 +265,7 @@
 </div>
 
 <script>
-    // CONFIGURAÇÃO FIREBASE - v77.0
+    // FIREBASE CONFIG - v79.0
     const firebaseConfig = {
         apiKey: "AIzaSyA8rHSh4HW_bSVzccYPb49aQJ5QlvakAKo",
         authDomain: "asb-sistema.firebaseapp.com",
@@ -280,97 +279,85 @@
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
     
-    // DESATIVAR PERSISTÊNCIA LOCAL PARA EVITAR DADOS CACHEADOS ANTIGOS NO CELULAR
-    const DB_KEY = 'asb_erp_db_v37_77'; 
-    let db = { users:[], estoque:[], clientes:[], orc_temp:[], historico:[], movimentacoes:[], config_temp:{} };
+    // ROTA DE DADOS PRINCIPAL
+    const DB_PATH = 'sistema_asb_v79_master';
+    let db = { users:[{user:'admin', pass:'asb123', level:'master'}], estoque:[], clientes:[], orc_temp:[], historico:[], movimentacoes:[], config_temp:{} };
+    
     let editingEstoqueIndex = null;
     let editingClienteIndex = null;
-    let isConnected = false;
 
-    // OUVINTE EM TEMPO REAL (MUDANÇA PROFUNDA: SÓ RENDERIZA SE O FIREBASE RESPONDER)
-    database.ref('sistema').on('value', (snapshot) => {
-        const cloudData = snapshot.val();
-        const ind = document.getElementById('sync-indicator');
-        const loginStatus = document.getElementById('login-status');
-        
-        if (cloudData) {
-            db = cloudData;
-            isConnected = true;
-            localStorage.setItem(DB_KEY, JSON.stringify(db));
-            if(ind) { ind.innerText = "Online (Nuvem)"; ind.classList.remove('sync-offline'); ind.classList.add('sync-online'); }
-            if(loginStatus) loginStatus.innerText = "Nuvem Conectada ✅";
-            render();
-        } else {
-            // Se o banco estiver zerado na nuvem, inicializa mas não sobrescreve com lixo
-            if(!db.users || db.users.length === 0) initBaseAdmin();
-        }
-    }, (error) => {
-        isConnected = false;
-        const ind = document.getElementById('sync-indicator');
-        if(ind) { ind.innerText = "Offline (Local)"; ind.classList.add('sync-offline'); }
-    });
-
-    function initBaseAdmin() {
-        db.users = [{user: 'admin', pass: 'asb123', level: 'master'}];
-        save();
+    // --- SINCRONIA EM TEMPO REAL ---
+    function startSync() {
+        database.ref(DB_PATH).on('value', (snapshot) => {
+            const data = snapshot.val();
+            const ind = document.getElementById('sync-indicator');
+            if (data) {
+                db = data;
+                if(ind) { ind.innerText = "Online (Nuvem)"; ind.className = 'sync-badge sync-online'; }
+                render();
+            } else {
+                // Caso banco esteja vazio, garante admin
+                if(!db.users || db.users.length === 0) db.users = [{user:'admin', pass:'asb123', level:'master'}];
+            }
+        }, (error) => {
+            const ind = document.getElementById('sync-indicator');
+            if(ind) { ind.innerText = "Erro Sincronia"; ind.className = 'sync-badge sync-offline'; }
+        });
     }
 
-    function reforcarConexaoFirebase() {
-        database.ref('.info/connected').once('value', (snap) => {
-            if (snap.val() === true) {
-                database.ref('sistema').once('value').then(s => {
-                    db = s.val();
-                    render();
-                    alert("Sincronia reforçada com sucesso!");
-                });
-            } else {
-                alert("Erro: Sem conexão com a internet no momento.");
+    startSync();
+
+    function save() { 
+        database.ref(DB_PATH).update(db).then(() => {
+            console.log("Nuvem atualizada e sincronizada.");
+        }).catch(err => {
+            console.error("Erro ao salvar:", err);
+            alert("Erro de conexão. Verifique a rede.");
+        });
+    }
+
+    function forceRealtimeSync() {
+        database.ref(DB_PATH).once('value').then(s => {
+            if(s.exists()){
+                db = s.val();
+                render();
+                alert("Canal de dados restaurado!");
             }
         });
     }
 
-    function save() { 
-        // Garante que a estrutura básica exista antes de salvar
-        if(!db.users) db.users = [{user: 'admin', pass: 'asb123', level: 'master'}];
-        
-        localStorage.setItem(DB_KEY, JSON.stringify(db)); 
-        database.ref('sistema').set(db).then(() => {
-            console.log("Dados enviados para nuvem.");
-            render();
-        }).catch(e => {
-            console.error("Falha de rede. Tentando novamente em 3s...");
-            setTimeout(save, 3000);
-        });
-    }
-
+    // --- LOGIN ---
     function handleLogin() {
         const u = document.getElementById('user-input').value.toLowerCase().trim();
         const p = document.getElementById('pass-input').value.trim();
+        const status = document.getElementById('login-status');
         
-        // MUDANÇA: Força leitura da nuvem ANTES do login
-        database.ref('sistema').once('value').then((snapshot) => {
-            const cloud = snapshot.val();
-            if(cloud) { db = cloud; }
-            
-            if (u === 'admin' && p === 'asb123') {
-                logarSucesso('admin', 'master');
+        status.innerText = "Autenticando...";
+        
+        database.ref(DB_PATH).once('value').then(snap => {
+            const cloud = snap.val();
+            if(cloud) db = cloud;
+
+            const found = db.users.find(x => x.user.toLowerCase() === u && x.pass === p);
+            if(found || (u === 'admin' && p === 'asb123')) {
+                logarSucesso(u, found ? found.level : 'master');
             } else {
-                const found = db.users.find(x => x.user.toLowerCase() === u && x.pass === p);
-                if(found) logarSucesso(found.user, found.level);
-                else alert("Acesso Negado!");
+                alert("Usuário ou senha inválidos.");
+                status.innerText = "Acesso negado.";
             }
         });
     }
 
-    function logarSucesso(usuario, nivel) {
+    function logarSucesso(user, level) {
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('main-app').style.display = 'block';
-        document.getElementById('welcome-msg').innerText = `Logado: ${usuario.toUpperCase()}`;
-        if(nivel === 'master') document.getElementById('nav-master').style.display = 'block';
+        document.getElementById('welcome-msg').innerText = `Olá, ${user.toUpperCase()}`;
+        if(level === 'master') document.getElementById('nav-master').style.display = 'block';
         refreshTemperature();
         render();
     }
 
+    // --- NAVEGAÇÃO ---
     function openTab(id, btn) {
         document.querySelectorAll('.section-panel').forEach(s => s.classList.remove('active'));
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -379,7 +366,7 @@
         render();
     }
 
-    // --- LOGICA DE DADOS (ESTOQUE, CLIENTES, ETC) ---
+    // --- ESTOQUE ---
     function mostrarFormEstoque() { document.getElementById('form-estoque').style.display = 'grid'; }
     function addEstoque() {
         const item = {
@@ -430,11 +417,12 @@
     }
 
     function calcularPrecoVenda() {
-        const c = parseFloat(document.getElementById('est-compra').value) || 0;
-        const m = parseFloat(document.getElementById('est-markup').value) || 0;
-        document.getElementById('est-val').value = (c + (c * (m/100))).toFixed(2);
+        const comp = parseFloat(document.getElementById('est-compra').value) || 0;
+        const mark = parseFloat(document.getElementById('est-markup').value) || 0;
+        document.getElementById('est-val').value = (comp + (comp * (mark/100))).toFixed(2);
     }
 
+    // --- CLIENTES ---
     function mostrarFormCliente() { document.getElementById('form-cliente').style.display = 'grid'; }
     function addCliente() {
         const c = {
@@ -475,10 +463,10 @@
     function cancelarEdicaoCliente() {
         editingClienteIndex = null;
         document.getElementById('form-cliente').style.display = 'none';
-        document.getElementById('btn-save-cli').innerText = "SALVAR";
         ['cli-nome','cli-razao','cli-doc','cli-tel','cli-email','cli-end','cli-cidade'].forEach(id => document.getElementById(id).value = '');
     }
 
+    // --- ORÇAMENTO ---
     function filterItems() {
         const term = document.getElementById('orc-search').value.toUpperCase();
         const sel = document.getElementById('orc-item-sel');
@@ -528,19 +516,19 @@
 
     function finalizarERegistrar() {
         const cli = document.getElementById('orc-cli-sel').value;
-        if(!cli || !db.orc_temp || db.orc_temp.length === 0) return alert("Selecione cliente e itens!");
+        if(!cli || !db.orc_temp || db.orc_temp.length === 0) return alert("Selecione cliente e adicione itens!");
         if(!db.historico) db.historico = [];
         db.historico.push({ id: Date.now(), data: new Date().toLocaleString(), cliente: cli, total: calculateTotal(), status: 'Pendente', itens: [...db.orc_temp], config: {...db.config_temp} });
         const cObj = db.clientes.find(c => c.nome === cli);
         if(cObj) cObj.ultima_compra = new Date().toLocaleString();
-        db.orc_temp = []; save(); alert("Orçamento registrado!");
+        db.orc_temp = []; save(); alert("Orçamento salvo no histórico!");
     }
 
     function updateStatus(id, newStatus) {
         const h = db.historico.find(x => x.id === id);
         if(h && h.status !== newStatus) {
             if(newStatus === 'Aprovado') {
-                if(confirm("Confirmar aprovação e baixa de estoque?")) {
+                if(confirm("Confirmar aprovação? Isso reduzirá o estoque.")) {
                     h.itens.forEach(it => {
                         const p = db.estoque.find(e => e.desc === it.desc);
                         if(p) { 
@@ -556,6 +544,7 @@
         }
     }
 
+    // --- MASTER ---
     function addNewUser() {
         const u = document.getElementById('new-user').value.trim();
         const p = document.getElementById('new-pass').value.trim();
@@ -568,6 +557,7 @@
         }
     }
 
+    // --- OUTROS ---
     function refreshTemperature() {
         const t = (Math.random() * (26 - 19) + 19).toFixed(1);
         document.getElementById('temp-val').innerText = t + "°C";
@@ -577,7 +567,7 @@
         const blob = new Blob([JSON.stringify(db)], {type: 'application/json'});
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a'); a.href = url;
-        a.download = `ASB_GESTAO_BACKUP_${new Date().toLocaleDateString()}.json`;
+        a.download = `ASB_BACKUP_${new Date().toLocaleDateString()}.json`;
         a.click();
     }
 
@@ -585,44 +575,50 @@
         const reader = new FileReader();
         reader.onload = function() {
             try {
-                db = JSON.parse(reader.result);
-                save(); alert("Backup Importado com Sucesso!");
-            } catch(e) { alert("Arquivo JSON inválido."); }
+                const imported = JSON.parse(reader.result);
+                if(confirm("Deseja substituir os dados da nuvem por este arquivo?")) {
+                    db = imported; save(); alert("Dados importados!");
+                }
+            } catch(e) { alert("Erro ao ler JSON."); }
         };
         reader.readAsText(input.files[0]);
     }
 
     function limparHistoricoGeral() {
-        if(confirm("Apagar histórico e logs permanentemente?")) {
+        if(confirm("AVISO: Apagar todo histórico e logs permanentemente?")) {
             db.historico = []; db.movimentacoes = []; save();
         }
     }
 
+    // --- RENDERIZAÇÃO CENTRALIZADA ---
     function render(filter) {
         if(!db) return;
 
+        // Estoque
         const estTbody = document.getElementById('tbl-estoque-corpo');
-        if(estTbody && db.estoque) {
+        if(estTbody) {
             estTbody.innerHTML = '';
-            const search = document.getElementById('search-est-input').value.toUpperCase();
-            db.estoque.forEach((item, idx) => {
-                if(filter === 'all' || item.desc.toUpperCase().includes(search)) {
+            const s = document.getElementById('search-est-input').value.toUpperCase();
+            if(db.estoque) db.estoque.forEach((item, idx) => {
+                if(filter === 'all' || item.desc.toUpperCase().includes(s)) {
                     estTbody.innerHTML += `<tr><td>${item.desc}</td><td>${item.unid}</td><td>${item.ncm}</td><td>${item.cfop}</td><td>R$ ${parseFloat(item.val).toFixed(2)}</td><td>${item.qtd}</td><td class="no-print"><button class="btn btn-edit" onclick="editEstItem(${idx})">EDIT</button><button class="btn btn-del" onclick="if(confirm('Excluir?')){db.estoque.splice(${idx},1);save();}">DEL</button></td></tr>`;
                 }
             });
         }
 
+        // Clientes
         const cliTbody = document.getElementById('tbl-clientes-corpo');
-        if(cliTbody && db.clientes) {
+        if(cliTbody) {
             cliTbody.innerHTML = '';
-            const searchCli = document.getElementById('search-cli-input').value.toUpperCase();
-            db.clientes.forEach((c, idx) => {
-                if(filter === 'all' || c.nome.toUpperCase().includes(searchCli)) {
+            const s = document.getElementById('search-cli-input').value.toUpperCase();
+            if(db.clientes) db.clientes.forEach((c, idx) => {
+                if(filter === 'all' || c.nome.toUpperCase().includes(s)) {
                     cliTbody.innerHTML += `<tr><td><strong>${c.nome}</strong><br><small>${c.doc}</small></td><td>${c.tel}</td><td>${c.cidade}/${c.uf}</td><td>${c.ultima_compra || '---'}</td><td class="no-print"><button class="btn btn-edit" onclick="editCliente(${idx})">EDIT</button></td></tr>`;
                 }
             });
         }
 
+        // Dropdown Clientes no Orçamento
         const orcCliSel = document.getElementById('orc-cli-sel');
         if(orcCliSel && db.clientes) {
             const current = orcCliSel.value;
@@ -632,39 +628,43 @@
             });
         }
 
+        // Lista do Orçamento Atual
         const orcTbody = document.getElementById('orc-lista-corpo');
-        if(orcTbody && db.orc_temp) {
+        if(orcTbody) {
             orcTbody.innerHTML = '';
-            db.orc_temp.forEach((it, idx) => {
+            if(db.orc_temp) db.orc_temp.forEach((it, idx) => {
                 orcTbody.innerHTML += `<tr><td>${it.qtd}</td><td>${it.desc}</td><td>R$ ${parseFloat(it.val).toFixed(2)}</td><td>R$ ${(it.val * it.qtd).toFixed(2)}</td><td class="no-print"><button class="btn btn-del" onclick="db.orc_temp.splice(${idx},1);save();">X</button></td></tr>`;
             });
             calculateTotal();
         }
 
+        // Histórico
         const histTbody = document.getElementById('tbl-historico-corpo');
-        if(histTbody && db.historico) {
+        if(histTbody) {
             histTbody.innerHTML = '';
-            const sHist = document.getElementById('search-hist').value.toUpperCase();
-            db.historico.slice().reverse().forEach((h) => {
-                if(h.cliente.toUpperCase().includes(sHist)) {
-                    histTbody.innerHTML += `<tr><td>${h.data}</td><td>${h.cliente}</td><td>R$ ${parseFloat(h.total).toFixed(2)}</td><td><select onchange="updateStatus(${h.id}, this.value)" style="width:auto; padding:5px;"><option ${h.status==='Pendente'?'selected':''}>Pendente</option><option ${h.status==='Aprovado'?'selected':''}>Aprovado</option><option ${h.status==='Cancelado'?'selected':''}>Cancelado</option></select></td><td><button class="btn btn-new" onclick="alert('Ver detalhes em breve...')">VER</button></td></tr>`;
+            const s = document.getElementById('search-hist').value.toUpperCase();
+            if(db.historico) db.historico.slice().reverse().forEach((h) => {
+                if(h.cliente.toUpperCase().includes(s)) {
+                    histTbody.innerHTML += `<tr><td>${h.data}</td><td>${h.cliente}</td><td>R$ ${parseFloat(h.total).toFixed(2)}</td><td><select onchange="updateStatus(${h.id}, this.value)" style="width:auto; padding:5px;"><option ${h.status==='Pendente'?'selected':''}>Pendente</option><option ${h.status==='Aprovado'?'selected':''}>Aprovado</option><option ${h.status==='Cancelado'?'selected':''}>Cancelado</option></select></td><td><button class="btn btn-new" onclick="alert('Funcionalidade de Detalhes em desenvolvimento.')">VER</button></td></tr>`;
                 }
             });
         }
 
+        // Movimentações
         const logTbody = document.getElementById('tbl-log-corpo');
-        if(logTbody && db.movimentacoes) {
+        if(logTbody) {
             logTbody.innerHTML = '';
-            db.movimentacoes.slice().reverse().forEach(m => {
+            if(db.movimentacoes) db.movimentacoes.slice().reverse().forEach(m => {
                 logTbody.innerHTML += `<tr><td>${m.data}</td><td>${m.produto}</td><td>${m.qtd}</td><td>${m.destino}</td></tr>`;
             });
         }
 
+        // Usuários
         const userTbody = document.getElementById('tbl-users-corpo');
-        if(userTbody && db.users) {
+        if(userTbody) {
             userTbody.innerHTML = '';
-            db.users.forEach((u, idx) => {
-                userTbody.innerHTML += `<tr><td>${u.user}</td><td>${u.level}</td><td><button onclick="if(confirm('Excluir?')){db.users.splice(${idx},1);save();}">DEL</button></td></tr>`;
+            if(db.users) db.users.forEach((u, idx) => {
+                userTbody.innerHTML += `<tr><td>${u.user}</td><td>${u.level}</td><td><button class="btn btn-del" onclick="if(confirm('Excluir?')){db.users.splice(${idx},1);save();}">DEL</button></td></tr>`;
             });
         }
     }
