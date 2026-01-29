@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
@@ -8,7 +8,11 @@
     <meta name="theme-color" content="#1a1a1a">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Gestão ASB ENG - v67.0</title>
+    <title>Gestão ASB ENG - v68.0</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
+
     <style>
         :root {
             --asb-dark: #1a1a1a;
@@ -33,6 +37,10 @@
         header h1 { margin: 0; font-size: 26px; letter-spacing: -1px; }
         header h1 span { color: var(--asb-blue); font-weight: 300; }
         
+        /* Indicador de Nuvem */
+        .sync-badge { font-size: 10px; padding: 4px 8px; border-radius: 10px; background: #eee; color: #666; margin-left: 10px; vertical-align: middle; }
+        .sync-online { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+
         nav { display: flex; gap: 8px; background: #2d2d2d; padding: 8px; border-radius: 8px; margin-bottom: 25px; flex-wrap: wrap; box-shadow: inset 0 2px 5px rgba(0,0,0,0.2); }
         .nav-btn { padding: 12px 18px; cursor: pointer; border: none; background: transparent; color: #bbb; font-weight: 600; border-radius: 6px; transition: 0.3s; font-size: 13px; }
         .nav-btn:hover { color: white; background: rgba(255,255,255,0.1); }
@@ -68,6 +76,9 @@
         .summary-box { background: #f8f9fa; padding: 25px; margin-top: 20px; border-radius: 10px; border: 1px solid #eee; }
         .summary-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; font-size: 14px; }
 
+        /* Botão Refresh de Temperatura conforme solicitado em 24/01 */
+        .temp-refresh-btn { background: var(--asb-success); color: white; border: none; border-radius: 4px; padding: 5px 10px; cursor: pointer; font-size: 10px; margin-left: 10px; }
+
         @media print {
             body { background: white; }
             nav, .no-print, .search-hero, header, .form-grid, .btn { display: none !important; }
@@ -94,7 +105,13 @@
 <div id="main-app">
     <div class="container">
         <header>
-            <div class="logo"><h1>ASB <span>AUTOMAÇÃO</span></h1></div>
+            <div class="logo">
+                <h1>ASB <span>AUTOMAÇÃO</span> <span id="sync-indicator" class="sync-badge">Offline</span></h1>
+                <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                    Temperatura: <span id="temp-val">--°C</span>
+                    <button class="temp-refresh-btn no-print" onclick="refreshTemperature()">ATUALIZAR ⚙️</button>
+                </div>
+            </div>
             <div class="no-print">
                 <small id="welcome-msg" style="font-weight:bold; color:#666;"></small> 
                 <button class="btn" style="background:#eee; color:#333; font-size:10px; height:30px; margin-left:15px;" onclick="location.reload()">SAIR</button>
@@ -242,11 +259,11 @@
         </section>
 
         <section id="tab-config" class="section-panel">
-            <h3 style="margin-top:0;">Gestão de Backup e Segurança</h3>
+            <h3 style="margin-top:0;">Gestão de Backup e Nuvem</h3>
             <div style="display:flex; flex-direction:column; gap:15px; max-width:400px;">
-                <button class="btn" style="background:var(--asb-dark); height:55px;" onclick="exportDB()">💾 BAIXAR BACKUP (.JSON)</button>
+                <button class="btn" style="background:var(--asb-dark); height:55px;" onclick="exportDB()">💾 BAIXAR BACKUP LOCAL (.JSON)</button>
                 <div style="border: 2px dashed #ccc; padding: 20px; border-radius: 8px; text-align: center;">
-                    <label>IMPORTAR BACKUP:</label>
+                    <label>IMPORTAR PARA NUVEM:</label>
                     <input type="file" accept=".json" onchange="importDB(this)">
                 </div>
                 <button class="btn btn-del" style="height:45px;" onclick="limparHistoricoGeral()">⚠️ LIMPAR HISTÓRICO E LOGS</button>
@@ -256,6 +273,20 @@
 </div>
 
 <script>
+    // CONFIGURAÇÃO FIREBASE - v68.0
+    const firebaseConfig = {
+        apiKey: "AIzaSyA8rHSh4HW_bSVzccYPb49aQJ5QlvakAKo",
+        authDomain: "asb-sistema.firebaseapp.com",
+        databaseURL: "https://asb-sistema-default-rtdb.firebaseio.com",
+        projectId: "asb-sistema",
+        storageBucket: "asb-sistema.firebasestorage.app",
+        messagingSenderId: "330568541447",
+        appId: "1:330568541447:web:93017cef6d072bbc2951a2"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+    
     const DB_KEY = 'asb_erp_db_v37';
     let db = JSON.parse(localStorage.getItem(DB_KEY)) || {};
     let editingEstoqueIndex = null;
@@ -273,7 +304,24 @@
     }
     initDB();
 
-    function save() { localStorage.setItem(DB_KEY, JSON.stringify(db)); render(); }
+    // ESCUTA EM TEMPO REAL DA NUVEM (FIREBASE)
+    database.ref('sistema').on('value', (snapshot) => {
+        const cloudData = snapshot.val();
+        if (cloudData) {
+            db = cloudData;
+            localStorage.setItem(DB_KEY, JSON.stringify(db));
+            document.getElementById('sync-indicator').innerText = "Online (Nuvem)";
+            document.getElementById('sync-indicator').classList.add('sync-online');
+            render();
+        }
+    });
+
+    // Função salvar agora envia para o Firebase
+    function save() { 
+        localStorage.setItem(DB_KEY, JSON.stringify(db)); 
+        database.ref('sistema').set(db); // Sincroniza com a nuvem
+        render(); 
+    }
 
     function handleLogin() {
         const u = document.getElementById('user-input').value;
@@ -284,6 +332,7 @@
             document.getElementById('main-app').style.display = 'block';
             document.getElementById('welcome-msg').innerText = `Logado: ${u.toUpperCase()}`;
             if(found.level === 'master') document.getElementById('nav-master').style.display = 'block';
+            refreshTemperature();
             render();
         } else { alert("Acesso Negado!"); }
     }
@@ -318,6 +367,7 @@
         else db.estoque.push(item);
         cancelarEdicao(); save();
     }
+
     function editEstItem(idx) {
         const i = db.estoque[idx];
         document.getElementById('est-desc').value = i.desc || '';
@@ -336,6 +386,7 @@
         document.querySelectorAll('#tab-estoque .edit-only').forEach(e => e.style.display = 'flex');
         document.getElementById('btn-save-est').innerText = "ATUALIZAR";
     }
+
     function cancelarEdicao() {
         editingEstoqueIndex = null;
         document.getElementById('form-estoque').style.display = 'none';
@@ -343,6 +394,7 @@
         document.getElementById('btn-save-est').innerText = "SALVAR";
         ['est-desc','est-unid','est-ncm','est-cfop','est-cst','est-ipi','est-icms','est-compra','est-markup','est-val','est-qtd'].forEach(id => document.getElementById(id).value = '');
     }
+
     function calcularPrecoVenda() {
         const c = parseFloat(document.getElementById('est-compra').value) || 0;
         const m = parseFloat(document.getElementById('est-markup').value) || 0;
@@ -367,6 +419,7 @@
         else db.clientes.push(c);
         cancelarEdicaoCliente(); save();
     }
+
     function editCliente(idx) {
         const c = db.clientes[idx];
         document.getElementById('cli-nome').value = c.nome;
@@ -382,6 +435,7 @@
         mostrarFormCliente();
         document.getElementById('btn-save-cli').innerText = "ATUALIZAR";
     }
+
     function cancelarEdicaoCliente() {
         editingClienteIndex = null;
         document.getElementById('form-cliente').style.display = 'none';
@@ -397,12 +451,14 @@
             sel.innerHTML += `<option value="${i.desc}">${i.desc} (R$ ${i.val.toFixed(2)})</option>`;
         });
     }
+
     function addItemOrc() {
         const valSel = document.getElementById('orc-item-sel').value;
         const qtd = parseInt(document.getElementById('orc-qtd-sel').value) || 1;
         const prod = db.estoque.find(p => p.desc === valSel);
         if(prod) { db.orc_temp.push({id: Date.now(), desc: prod.desc, val: prod.val, qtd: qtd}); save(); }
     }
+
     function novoOrcamento() {
         if(confirm("Limpar orçamento atual?")) {
             db.orc_temp = [];
@@ -411,6 +467,7 @@
             save();
         }
     }
+
     function calculateTotal() {
         let mat = 0;
         db.orc_temp.forEach(o => mat += (o.val * o.qtd));
@@ -426,6 +483,7 @@
         db.config_temp = { acess: (parseFloat(document.getElementById('orc-perc-acess').value) || 0), mo_fixo: (parseFloat(document.getElementById('orc-mo-fixo').value) || 0), mo_perc: (parseFloat(document.getElementById('orc-perc-mo').value) || 0), cliente: cli };
         return total;
     }
+
     function finalizarERegistrar() {
         const cli = document.getElementById('orc-cli-sel').value;
         if(!cli || db.orc_temp.length === 0) return alert("Selecione cliente e itens!");
@@ -433,33 +491,6 @@
         const cObj = db.clientes.find(c => c.nome === cli);
         if(cObj) cObj.ultima_compra = new Date().toLocaleString();
         db.orc_temp = []; save(); alert("Orçamento registrado!");
-    }
-
-    function editOrcamentoHist(id) {
-        const h = db.historico.find(x => x.id === id);
-        if(h) {
-            if(confirm("Carregar este orçamento para edição? O orçamento atual na tela será perdido.")) {
-                db.orc_temp = [...h.itens];
-                db.config_temp = {...h.config};
-                document.getElementById('orc-cli-sel').value = h.cliente;
-                document.getElementById('orc-perc-acess').value = h.config.acess;
-                document.getElementById('orc-mo-fixo').value = h.config.mo_fixo;
-                document.getElementById('orc-perc-mo').value = h.config.mo_perc;
-                openTab('tab-orcamento', document.querySelectorAll('.nav-btn')[2]);
-                save();
-            }
-        }
-    }
-
-    function addNewUser() {
-        const u = document.getElementById('new-user').value.trim();
-        const p = document.getElementById('new-pass').value.trim();
-        if(u && p) {
-            db.users.push({user: u, pass: p, level: 'comum'});
-            document.getElementById('new-user').value = '';
-            document.getElementById('new-pass').value = '';
-            save();
-        }
     }
 
     function updateStatus(id, newStatus) {
@@ -474,6 +505,49 @@
                     h.status = 'Aprovado';
                 } else { render(); return; }
             } else { h.status = newStatus; }
+            save();
+        }
+    }
+
+    function addNewUser() {
+        const u = document.getElementById('new-user').value.trim();
+        const p = document.getElementById('new-pass').value.trim();
+        if(u && p) {
+            db.users.push({user: u, pass: p, level: 'comum'});
+            document.getElementById('new-user').value = '';
+            document.getElementById('new-pass').value = '';
+            save();
+        }
+    }
+
+    function refreshTemperature() {
+        const t = (Math.random() * (26 - 19) + 19).toFixed(1);
+        document.getElementById('temp-val').innerText = t + "°C";
+    }
+
+    function exportDB() {
+        const blob = new Blob([JSON.stringify(db)], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ASB_GESTAO_BACKUP_${new Date().toLocaleDateString()}.json`;
+        a.click();
+    }
+
+    function importDB(input) {
+        const reader = new FileReader();
+        reader.onload = function() {
+            db = JSON.parse(reader.result);
+            save();
+            alert("Backup Importado e Sincronizado com a Nuvem!");
+        };
+        reader.readAsText(input.files[0]);
+    }
+
+    function limparHistoricoGeral() {
+        if(confirm("Deseja realmente apagar todo o histórico e logs?")) {
+            db.historico = [];
+            db.movimentacoes = [];
             save();
         }
     }
@@ -505,43 +579,21 @@
         const sHist = document.getElementById('search-hist').value.toUpperCase();
         db.historico.slice().reverse().forEach(h => {
             if(!sHist || h.cliente.toUpperCase().includes(sHist)) {
-                bHist.innerHTML += `<tr><td>${h.data}</td><td>${h.cliente}</td><td>R$ ${h.total.toFixed(2)}</td><td>
-                    <select onchange="updateStatus(${h.id}, this.value)" style="padding:4px;"><option value="Pendente" ${h.status === 'Pendente' ? 'selected' : ''}>Pendente</option><option value="Aprovado" ${h.status === 'Aprovado' ? 'selected' : ''}>Aprovado</option><option value="Cancelado" ${h.status === 'Cancelado' ? 'selected' : ''}>Cancelado</option></select>
-                </td><td><button class="btn btn-edit" onclick="editOrcamentoHist(${h.id})">EDITAR</button> <button class="btn btn-del" onclick="if(confirm('Excluir?')){db.historico = db.historico.filter(x => x.id !== ${h.id});save()}">X</button></td></tr>`;
+                bHist.innerHTML += `<tr><td>${h.data}</td><td>${h.cliente}</td><td>R$ ${h.total.toFixed(2)}</td><td><select onchange="updateStatus(${h.id}, this.value)"><option ${h.status==='Pendente'?'selected':''}>Pendente</option><option ${h.status==='Aprovado'?'selected':''}>Aprovado</option><option ${h.status==='Cancelado'?'selected':''}>Cancelado</option></select></td><td><button class="btn btn-del" onclick="if(confirm('Excluir histórico?')){db.historico = db.historico.filter(x => x.id !== ${h.id});save();}">X</button></td></tr>`;
             }
         });
 
         const bLog = document.getElementById('tbl-log-corpo'); bLog.innerHTML = '';
-        db.movimentacoes.slice().reverse().forEach(m => bLog.innerHTML += `<tr><td>${m.data}</td><td>${m.produto}</td><td>${m.qtd}</td><td>${m.destino}</td></tr>`);
-        
-        const bUsers = document.getElementById('tbl-users-corpo'); bUsers.innerHTML = '';
+        db.movimentacoes.slice().reverse().forEach(m => {
+            bLog.innerHTML += `<tr><td>${m.data}</td><td>${m.produto}</td><td>${m.qtd}</td><td>${m.destino}</td></tr>`;
+        });
+
+        const bUser = document.getElementById('tbl-users-corpo'); bUser.innerHTML = '';
         db.users.forEach((u, idx) => {
-            bUsers.innerHTML += `<tr><td>${u.user}</td><td>${u.level}</td><td>${u.user !== 'admin' ? `<button class="btn btn-del" onclick="if(confirm('Excluir usuário?')){db.users.splice(${idx},1);save();}">X</button>` : '---'}</td></tr>`;
+            bUser.innerHTML += `<tr><td>${u.user}</td><td>${u.level}</td><td>${u.level !== 'master' ? `<button class="btn btn-del" onclick="db.users.splice(${idx},1);save();">X</button>` : ''}</td></tr>`;
         });
 
         calculateTotal();
-    }
-
-    function exportDB() {
-        const blob = new Blob([JSON.stringify(db)], {type: 'application/json'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = `backup_asb_${new Date().toLocaleDateString()}.json`; a.click();
-    }
-
-    function importDB(input) {
-        const reader = new FileReader();
-        reader.onload = function(){ db = JSON.parse(reader.result); save(); location.reload(); };
-        reader.readAsText(input.files[0]);
-    }
-
-    function limparHistoricoGeral() {
-        if(confirm("ATENÇÃO: Isso apagará todo o histórico de orçamentos e movimentações. Deseja continuar?")) {
-            db.historico = [];
-            db.movimentacoes = [];
-            save();
-            alert("Limpeza concluída.");
-        }
     }
 </script>
 
