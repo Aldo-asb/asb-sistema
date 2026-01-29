@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#1a1a1a">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Gestão ASB ENG - v69.0</title>
+    <title>Gestão ASB ENG - v74.0</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
@@ -272,7 +272,7 @@
 </div>
 
 <script>
-    // CONFIGURAÇÃO FIREBASE - v69.0
+    // CONFIGURAÇÃO FIREBASE - v74.0
     const firebaseConfig = {
         apiKey: "AIzaSyA8rHSh4HW_bSVzccYPb49aQJ5QlvakAKo",
         authDomain: "asb-sistema.firebaseapp.com",
@@ -303,17 +303,25 @@
     }
     initDB();
 
-    // ESCUTA EM TEMPO REAL - CORRIGIDA PARA CELULAR
+    // ESCUTA EM TEMPO REAL - AJUSTE PARA CELULAR (PERSISTÊNCIA LOCAL SE NUVEM FALHAR)
     database.ref('sistema').on('value', (snapshot) => {
         const cloudData = snapshot.val();
         if (cloudData) {
             db = cloudData;
             localStorage.setItem(DB_KEY, JSON.stringify(db));
             const ind = document.getElementById('sync-indicator');
-            ind.innerText = "Online (Nuvem)";
-            ind.classList.add('sync-online');
+            if(ind) {
+                ind.innerText = "Online (Nuvem)";
+                ind.classList.add('sync-online');
+            }
+            render();
+        } else {
+            // Se não houver dados na nuvem, renderiza o que tem no local (comum em falha de 4G)
             render();
         }
+    }, (error) => {
+        console.log("Erro de conexão. Usando modo offline local.");
+        render();
     });
 
     function forcarSincronia() {
@@ -330,8 +338,12 @@
 
     function save() { 
         localStorage.setItem(DB_KEY, JSON.stringify(db)); 
-        database.ref('sistema').set(db);
-        render(); 
+        database.ref('sistema').set(db).then(() => {
+            render();
+        }).catch(e => {
+            console.error("Erro ao salvar na nuvem, salvo apenas localmente.");
+            render();
+        });
     }
 
     function handleLogin() {
@@ -556,101 +568,138 @@
         reader.onload = function() {
             db = JSON.parse(reader.result);
             save();
-            alert("Backup Importado e Sincronizado com a Nuvem!");
+            alert("Backup Importado com Sucesso!");
         };
         reader.readAsText(input.files[0]);
     }
 
     function limparHistoricoGeral() {
-        if(confirm("Deseja realmente apagar todo o histórico e logs?")) {
+        if(confirm("Apagar histórico e logs permanentemente?")) {
             db.historico = [];
             db.movimentacoes = [];
             save();
         }
     }
 
-    // --- RENDER GERAL ---
-    function render(mode) {
-        // Estoque
-        const corpoEst = document.getElementById('tbl-estoque-corpo');
-        corpoEst.innerHTML = '';
-        const searchEst = document.getElementById('search-est-input').value.toUpperCase();
-        db.estoque.forEach((i, idx) => {
-            if(mode !== 'all' && searchEst && !i.desc.toUpperCase().includes(searchEst)) return;
-            corpoEst.innerHTML += `<tr>
-                <td>${i.desc}</td><td>${i.unid}</td><td>${i.ncm}</td><td>${i.cfop}</td>
-                <td>R$ ${i.val.toFixed(2)}</td>
-                <td style="font-weight:bold; color:${i.qtd < 5 ? 'red' : 'green'}">${i.qtd}</td>
-                <td class="no-print">
-                    <button class="btn btn-edit" onclick="editEstItem(${idx})">✏️</button>
-                    <button class="btn btn-del" onclick="if(confirm('Excluir?')){db.estoque.splice(${idx},1);save();}">🗑️</button>
-                </td></tr>`;
-        });
+    // --- RENDERIZAÇÃO CENTRALIZADA (CORREÇÃO CELULAR) ---
+    function render(filter) {
+        // Render Estoque
+        const estTbody = document.getElementById('tbl-estoque-corpo');
+        if(estTbody) {
+            estTbody.innerHTML = '';
+            const search = document.getElementById('search-est-input').value.toUpperCase();
+            db.estoque.forEach((item, idx) => {
+                if(filter === 'all' || item.desc.toUpperCase().includes(search)) {
+                    estTbody.innerHTML += `<tr>
+                        <td>${item.desc}</td>
+                        <td>${item.unid}</td>
+                        <td>${item.ncm}</td>
+                        <td>${item.cfop}</td>
+                        <td>R$ ${item.val.toFixed(2)}</td>
+                        <td>${item.qtd}</td>
+                        <td class="no-print">
+                            <button class="btn btn-edit" onclick="editEstItem(${idx})">EDIT</button>
+                            <button class="btn btn-del" onclick="if(confirm('Excluir?')){db.estoque.splice(${idx},1);save();}">DEL</button>
+                        </td>
+                    </tr>`;
+                }
+            });
+        }
 
-        // Clientes
-        const corpoCli = document.getElementById('tbl-clientes-corpo');
-        corpoCli.innerHTML = '';
-        const searchCli = document.getElementById('search-cli-input').value.toUpperCase();
-        db.clientes.forEach((c, idx) => {
-            if(mode !== 'all' && searchCli && !c.nome.toUpperCase().includes(searchCli)) return;
-            corpoCli.innerHTML += `<tr>
-                <td><strong>${c.nome}</strong><br><small>${c.doc}</small></td>
-                <td>${c.tel}</td><td>${c.cidade}/${c.uf}</td><td>${c.ultima_compra}</td>
-                <td class="no-print"><button class="btn btn-edit" onclick="editCliente(${idx})">✏️</button></td></tr>`;
-        });
+        // Render Clientes
+        const cliTbody = document.getElementById('tbl-clientes-corpo');
+        if(cliTbody) {
+            cliTbody.innerHTML = '';
+            const searchCli = document.getElementById('search-cli-input').value.toUpperCase();
+            db.clientes.forEach((c, idx) => {
+                if(filter === 'all' || c.nome.toUpperCase().includes(searchCli)) {
+                    cliTbody.innerHTML += `<tr>
+                        <td><strong>${c.nome}</strong><br><small>${c.doc}</small></td>
+                        <td>${c.tel}</td>
+                        <td>${c.cidade}/${c.uf}</td>
+                        <td>${c.ultima_compra || '---'}</td>
+                        <td class="no-print">
+                            <button class="btn btn-edit" onclick="editCliente(${idx})">EDIT</button>
+                        </td>
+                    </tr>`;
+                }
+            });
+        }
 
-        // Orçamento - Listar clientes no select
-        const selCli = document.getElementById('orc-cli-sel');
-        const currentSel = selCli.value;
-        selCli.innerHTML = '<option value="">Selecionar Cliente</option>';
-        db.clientes.forEach(c => selCli.innerHTML += `<option value="${c.nome}">${c.nome}</option>`);
-        selCli.value = currentSel;
+        // Dropdown Orcamento
+        const orcCliSel = document.getElementById('orc-cli-sel');
+        if(orcCliSel) {
+            const current = orcCliSel.value;
+            orcCliSel.innerHTML = '<option value="">Selecionar Cliente</option>';
+            db.clientes.forEach(c => {
+                orcCliSel.innerHTML += `<option value="${c.nome}" ${current === c.nome ? 'selected' : ''}>${c.nome}</option>`;
+            });
+        }
 
-        const corpoOrc = document.getElementById('orc-lista-corpo');
-        corpoOrc.innerHTML = '';
-        db.orc_temp.forEach((it, idx) => {
-            corpoOrc.innerHTML += `<tr>
-                <td>${it.qtd}</td><td>${it.desc}</td><td>R$ ${it.val.toFixed(2)}</td><td>R$ ${(it.val*it.qtd).toFixed(2)}</td>
-                <td class="no-print"><button class="btn btn-del" onclick="db.orc_temp.splice(${idx},1);save()">X</button></td></tr>`;
-        });
-        calculateTotal();
+        // Itens do Orcamento atual
+        const orcTbody = document.getElementById('orc-lista-corpo');
+        if(orcTbody) {
+            orcTbody.innerHTML = '';
+            db.orc_temp.forEach((it, idx) => {
+                orcTbody.innerHTML += `<tr>
+                    <td>${it.qtd}</td>
+                    <td>${it.desc}</td>
+                    <td>R$ ${it.val.toFixed(2)}</td>
+                    <td>R$ ${(it.val * it.qtd).toFixed(2)}</td>
+                    <td class="no-print"><button class="btn btn-del" onclick="db.orc_temp.splice(${idx},1);save();">X</button></td>
+                </tr>`;
+            });
+            calculateTotal();
+        }
 
         // Histórico
-        const corpoHist = document.getElementById('tbl-historico-corpo');
-        corpoHist.innerHTML = '';
-        const searchHist = document.getElementById('search-hist').value.toUpperCase();
-        db.historico.slice().reverse().forEach(h => {
-            if(searchHist && !h.cliente.toUpperCase().includes(searchHist)) return;
-            corpoHist.innerHTML += `<tr>
-                <td>${h.data}</td><td>${h.cliente}</td><td>R$ ${h.total.toFixed(2)}</td>
-                <td><select onchange="updateStatus(${h.id}, this.value)" ${h.status === 'Aprovado' ? 'disabled' : ''}>
-                    <option ${h.status === 'Pendente' ? 'selected' : ''}>Pendente</option>
-                    <option ${h.status === 'Aprovado' ? 'selected' : ''}>Aprovado</option>
-                    <option ${h.status === 'Cancelado' ? 'selected' : ''}>Cancelado</option>
-                </select></td>
-                <td><button class="btn btn-edit" onclick="alert('Funcionalidade de Visualização Completa em Breve')">VER</button></td></tr>`;
-        });
+        const histTbody = document.getElementById('tbl-historico-corpo');
+        if(histTbody) {
+            histTbody.innerHTML = '';
+            const sHist = document.getElementById('search-hist').value.toUpperCase();
+            db.historico.slice().reverse().forEach((h) => {
+                if(h.cliente.toUpperCase().includes(sHist)) {
+                    histTbody.innerHTML += `<tr>
+                        <td>${h.data}</td>
+                        <td>${h.cliente}</td>
+                        <td>R$ ${h.total.toFixed(2)}</td>
+                        <td>
+                            <select onchange="updateStatus(${h.id}, this.value)" style="width:auto; padding:5px;">
+                                <option ${h.status==='Pendente'?'selected':''}>Pendente</option>
+                                <option ${h.status==='Aprovado'?'selected':''}>Aprovado</option>
+                                <option ${h.status==='Cancelado'?'selected':''}>Cancelado</option>
+                            </select>
+                        </td>
+                        <td><button class="btn btn-new" onclick="alert('Funcionalidade Ver em breve...')">VER</button></td>
+                    </tr>`;
+                }
+            });
+        }
 
         // Log
-        const corpoLog = document.getElementById('tbl-log-corpo');
-        corpoLog.innerHTML = '';
-        db.movimentacoes.slice().reverse().forEach(m => {
-            corpoLog.innerHTML += `<tr><td>${m.data}</td><td>${m.produto}</td><td>${m.qtd}</td><td>${m.destino}</td></tr>`;
-        });
+        const logTbody = document.getElementById('tbl-log-corpo');
+        if(logTbody) {
+            logTbody.innerHTML = '';
+            db.movimentacoes.slice().reverse().forEach(m => {
+                logTbody.innerHTML += `<tr><td>${m.data}</td><td>${m.produto}</td><td>${m.qtd}</td><td>${m.destino}</td></tr>`;
+            });
+        }
 
-        // Users
-        const corpoUser = document.getElementById('tbl-users-corpo');
-        corpoUser.innerHTML = '';
-        db.users.forEach((u, idx) => {
-            corpoUser.innerHTML += `<tr><td>${u.user}</td><td>${u.level}</td>
-                <td><button class="btn btn-del" onclick="if(confirm('Excluir usuário?')){db.users.splice(${idx},1);save();}">🗑️</button></td></tr>`;
-        });
+        // Usuarios
+        const userTbody = document.getElementById('tbl-users-corpo');
+        if(userTbody) {
+            userTbody.innerHTML = '';
+            db.users.forEach((u, idx) => {
+                userTbody.innerHTML += `<tr><td>${u.user}</td><td>${u.level}</td><td><button onclick="if(confirm('Excluir?')){db.users.splice(${idx},1);save();}">DEL</button></td></tr>`;
+            });
+        }
     }
 
     // Inicialização
-    window.onload = () => { render(); };
-    
-    // v69.0
+    window.onload = () => {
+        if(db.users) render();
+    };
+
 </script>
 </body>
 </html>
