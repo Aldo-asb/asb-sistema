@@ -1,4 +1,4 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#1a1a1a">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Gestão ASB ENG - v68.0</title>
+    <title>Gestão ASB ENG - v69.0</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
@@ -37,7 +37,6 @@
         header h1 { margin: 0; font-size: 26px; letter-spacing: -1px; }
         header h1 span { color: var(--asb-blue); font-weight: 300; }
         
-        /* Indicador de Nuvem */
         .sync-badge { font-size: 10px; padding: 4px 8px; border-radius: 10px; background: #eee; color: #666; margin-left: 10px; vertical-align: middle; }
         .sync-online { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
 
@@ -76,7 +75,6 @@
         .summary-box { background: #f8f9fa; padding: 25px; margin-top: 20px; border-radius: 10px; border: 1px solid #eee; }
         .summary-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; font-size: 14px; }
 
-        /* Botão Refresh de Temperatura conforme solicitado em 24/01 */
         .temp-refresh-btn { background: var(--asb-success); color: white; border: none; border-radius: 4px; padding: 5px 10px; cursor: pointer; font-size: 10px; margin-left: 10px; }
 
         @media print {
@@ -106,7 +104,7 @@
     <div class="container">
         <header>
             <div class="logo">
-                <h1>ASB <span>AUTOMAÇÃO</span> <span id="sync-indicator" class="sync-badge">Offline</span></h1>
+                <h1>ASB <span>AUTOMAÇÃO</span> <span id="sync-indicator" class="sync-badge">Conectando...</span></h1>
                 <div style="font-size: 12px; color: #666; margin-top: 5px;">
                     Temperatura: <span id="temp-val">--°C</span>
                     <button class="temp-refresh-btn no-print" onclick="refreshTemperature()">ATUALIZAR ⚙️</button>
@@ -172,23 +170,6 @@
             <div class="search-hero">
                 <button class="btn btn-new" onclick="mostrarFormCliente()">NOVO CLIENTE</button>
                 <input type="text" id="search-cli-input" placeholder="🔍 Buscar cliente..." onkeyup="render()">
-                <button class="btn" style="background:var(--asb-dark)" onclick="render('all')">VER TODOS</button>
-                <button class="btn" style="background:var(--asb-blue)" onclick="window.print()">🖨️ IMPRIMIR LISTA</button>
-            </div>
-            <div class="form-grid" id="form-cliente">
-                <div class="field-group"><label>Nome Fantasia</label><input type="text" id="cli-nome"></div>
-                <div class="field-group"><label>Razão Social</label><input type="text" id="cli-razao"></div>
-                <div class="field-group"><label>Tipo</label><select id="cli-tipo"><option>Física</option><option>Jurídica</option></select></div>
-                <div class="field-group"><label>CPF / CNPJ</label><input type="text" id="cli-doc"></div>
-                <div class="field-group"><label>WhatsApp</label><input type="text" id="cli-tel"></div>
-                <div class="field-group"><label>E-mail</label><input type="email" id="cli-email"></div>
-                <div class="field-group"><label>Endereço</label><input type="text" id="cli-end"></div>
-                <div class="field-group"><label>Cidade</label><input type="text" id="cli-cidade"></div>
-                <div class="field-group"><label>Estado</label><select id="cli-uf"><option>GO</option><option>DF</option><option>SP</option><option>MG</option></select></div>
-                <div class="form-actions-column">
-                    <button class="btn btn-add" id="btn-save-cli" onclick="addCliente()">SALVAR</button>
-                    <button class="btn btn-new" onclick="cancelarEdicaoCliente()">CANCELAR</button>
-                </div>
             </div>
             <table>
                 <thead><tr><th>Cliente / Doc</th><th>Contato</th><th>Cidade/UF</th><th>Última Compra</th><th class="no-print">Ações</th></tr></thead>
@@ -205,11 +186,6 @@
                 <button class="btn btn-add" onclick="addItemOrc()">INSERIR</button>
                 <button class="btn btn-new" onclick="novoOrcamento()">NOVO ORÇAMENTO</button>
             </div>
-            <div class="form-grid no-print" style="display:grid; background:#f0f7ff; border-color: #bcd9f5;">
-                <div class="field-group"><label>Acessórios (%)</label><input type="number" id="orc-perc-acess" oninput="calculateTotal()"></div>
-                <div class="field-group"><label>Mão de Obra (R$)</label><input type="number" id="orc-mo-fixo" oninput="calculateTotal()"></div>
-                <div class="field-group"><label>Mão de Obra (%)</label><input type="number" id="orc-perc-mo" oninput="calculateTotal()"></div>
-            </div>
             <div id="orc-area">
                 <h2 style="text-align:center; border-bottom: 2px solid #000; padding-bottom:10px;">ORÇAMENTO - ASB AUTOMAÇÃO</h2>
                 <p id="orc-info-cliente" style="font-weight:bold;"></p>
@@ -219,19 +195,13 @@
                 </table>
                 <div class="summary-box">
                     <div class="summary-row"><span>Materiais:</span><strong id="res-materiais">R$ 0.00</strong></div>
-                    <div class="summary-row"><span>Acessórios:</span><strong id="res-acessorios">R$ 0.00</strong></div>
-                    <div class="summary-row"><span>Mão de Obra:</span><strong id="res-mo">R$ 0.00</strong></div>
                     <div class="summary-row" style="font-size:20px; border-top:2px solid #333; padding-top:15px; color:var(--asb-blue);"><span>TOTAL FINAL:</span><span id="res-total-final" style="font-weight:900;">R$ 0.00</span></div>
                 </div>
-                <div class="no-print">
-                    <button class="btn btn-print" onclick="window.print()">🖨️ GERAR PDF / IMPRIMIR</button>
-                    <button class="btn btn-add" style="width:100%; margin-top:10px; height:50px;" onclick="finalizarERegistrar()">✅ FINALIZAR E SALVAR</button>
-                </div>
+                <button class="btn btn-print no-print" onclick="window.print()">🖨️ GERAR PDF / IMPRIMIR</button>
             </div>
         </section>
 
         <section id="tab-relatorios" class="section-panel">
-            <div class="search-hero"><input type="text" id="search-hist" placeholder="🔍 Filtrar histórico por cliente..." onkeyup="render()"></div>
             <table>
                 <thead><tr><th>Data</th><th>Cliente</th><th>Valor</th><th>Status</th><th>Ações</th></tr></thead>
                 <tbody id="tbl-historico-corpo"></tbody>
@@ -240,10 +210,7 @@
 
         <section id="tab-movimentacao" class="section-panel">
             <h3>Log de Saídas de Estoque</h3>
-            <table>
-                <thead><tr><th>Data</th><th>Produto</th><th>Qtd</th><th>Destino (Cliente)</th></tr></thead>
-                <tbody id="tbl-log-corpo"></tbody>
-            </table>
+            <tbody id="tbl-log-corpo"></tbody>
         </section>
 
         <section id="tab-master" class="section-panel">
@@ -252,28 +219,25 @@
                 <input type="password" id="new-pass" placeholder="Senha">
                 <button class="btn btn-add" onclick="addNewUser()">CADASTRAR</button>
             </div>
-            <table>
-                <thead><tr><th>Usuário</th><th>Nível</th><th>Ações</th></tr></thead>
-                <tbody id="tbl-users-corpo"></tbody>
-            </table>
+            <tbody id="tbl-users-corpo"></tbody>
         </section>
 
         <section id="tab-config" class="section-panel">
             <h3 style="margin-top:0;">Gestão de Backup e Nuvem</h3>
             <div style="display:flex; flex-direction:column; gap:15px; max-width:400px;">
-                <button class="btn" style="background:var(--asb-dark); height:55px;" onclick="exportDB()">💾 BAIXAR BACKUP LOCAL (.JSON)</button>
+                <button class="btn" style="background:var(--asb-success); height:55px;" onclick="forçarSincronia()">🔄 FORÇAR SINCRONIA (CELULAR)</button>
+                <button class="btn" style="background:var(--asb-dark); height:45px;" onclick="exportDB()">💾 BAIXAR BACKUP LOCAL (.JSON)</button>
                 <div style="border: 2px dashed #ccc; padding: 20px; border-radius: 8px; text-align: center;">
                     <label>IMPORTAR PARA NUVEM:</label>
                     <input type="file" accept=".json" onchange="importDB(this)">
                 </div>
-                <button class="btn btn-del" style="height:45px;" onclick="limparHistoricoGeral()">⚠️ LIMPAR HISTÓRICO E LOGS</button>
             </div>
         </section>
     </div>
 </div>
 
 <script>
-    // CONFIGURAÇÃO FIREBASE - v68.0
+    // CONFIGURAÇÃO FIREBASE - v69.0
     const firebaseConfig = {
         apiKey: "AIzaSyA8rHSh4HW_bSVzccYPb49aQJ5QlvakAKo",
         authDomain: "asb-sistema.firebaseapp.com",
@@ -286,40 +250,51 @@
 
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
-    
     const DB_KEY = 'asb_erp_db_v37';
     let db = JSON.parse(localStorage.getItem(DB_KEY)) || {};
-    let editingEstoqueIndex = null;
-    let editingClienteIndex = null;
-    
+
     function initDB() {
-        if (!db.users || db.users.length === 0) db.users = [{user: 'admin', pass: 'asb123', level: 'master'}];
+        if (!db.users) db.users = [{user: 'admin', pass: 'asb123', level: 'master'}];
         if (!db.estoque) db.estoque = [];
         if (!db.clientes) db.clientes = [];
-        if (!db.orc_temp) db.orc_temp = [];
         if (!db.historico) db.historico = [];
         if (!db.movimentacoes) db.movimentacoes = [];
-        if (!db.config_temp) db.config_temp = {acess: 0, mo_fixo: 0, mo_perc: 0, cliente: ''};
+        if (!db.orc_temp) db.orc_temp = [];
         localStorage.setItem(DB_KEY, JSON.stringify(db));
     }
     initDB();
 
-    // ESCUTA EM TEMPO REAL DA NUVEM (FIREBASE)
+    // ESCUTA EM TEMPO REAL - MELHORADA PARA CELULAR
     database.ref('sistema').on('value', (snapshot) => {
         const cloudData = snapshot.val();
         if (cloudData) {
             db = cloudData;
             localStorage.setItem(DB_KEY, JSON.stringify(db));
-            document.getElementById('sync-indicator').innerText = "Online (Nuvem)";
-            document.getElementById('sync-indicator').classList.add('sync-online');
+            const badge = document.getElementById('sync-indicator');
+            badge.innerText = "Online (Nuvem)";
+            badge.classList.add('sync-online');
             render();
         }
+    }, (error) => {
+        console.error("Erro na nuvem:", error);
+        document.getElementById('sync-indicator').innerText = "Erro de Conexão";
     });
 
-    // Função salvar agora envia para o Firebase
+    function forçarSincronia() {
+        database.ref('sistema').once('value').then((snapshot) => {
+            const data = snapshot.val();
+            if(data) {
+                db = data;
+                localStorage.setItem(DB_KEY, JSON.stringify(db));
+                render();
+                alert("Dados sincronizados com sucesso!");
+            }
+        });
+    }
+
     function save() { 
         localStorage.setItem(DB_KEY, JSON.stringify(db)); 
-        database.ref('sistema').set(db); // Sincroniza com a nuvem
+        database.ref('sistema').set(db);
         render(); 
     }
 
@@ -345,179 +320,125 @@
         render();
     }
 
-    function mostrarFormEstoque() { document.getElementById('form-estoque').style.display = 'grid'; }
-    function mostrarFormCliente() { document.getElementById('form-cliente').style.display = 'grid'; }
-
-    function addEstoque() {
-        const item = {
-            desc: document.getElementById('est-desc').value.trim(),
-            unid: document.getElementById('est-unid').value.trim(),
-            ncm: document.getElementById('est-ncm').value.trim(),
-            cfop: document.getElementById('est-cfop').value.trim(),
-            cst: document.getElementById('est-cst').value.trim(),
-            ipi: parseFloat(document.getElementById('est-ipi').value) || 0,
-            icms: parseFloat(document.getElementById('est-icms').value) || 0,
-            compra: parseFloat(document.getElementById('est-compra').value) || 0,
-            markup: parseFloat(document.getElementById('est-markup').value) || 0,
-            val: parseFloat(document.getElementById('est-val').value) || 0,
-            qtd: parseInt(document.getElementById('est-qtd').value) || 0
-        };
-        if(!item.desc) return;
-        if(editingEstoqueIndex !== null) db.estoque[editingEstoqueIndex] = item;
-        else db.estoque.push(item);
-        cancelarEdicao(); save();
+    // FUNÇÕES DE RENDERIZAÇÃO
+    function render(filter = '') {
+        renderEstoque(filter);
+        renderClientes(filter);
+        renderOrcamento();
+        renderHistorico();
+        renderUsers();
     }
 
-    function editEstItem(idx) {
-        const i = db.estoque[idx];
-        document.getElementById('est-desc').value = i.desc || '';
-        document.getElementById('est-unid').value = i.unid || '';
-        document.getElementById('est-ncm').value = i.ncm || '';
-        document.getElementById('est-cfop').value = i.cfop || '';
-        document.getElementById('est-cst').value = i.cst || '';
-        document.getElementById('est-ipi').value = i.ipi || 0;
-        document.getElementById('est-icms').value = i.icms || 0;
-        document.getElementById('est-compra').value = i.compra || 0;
-        document.getElementById('est-markup').value = i.markup || 0;
-        document.getElementById('est-val').value = i.val || 0;
-        document.getElementById('est-qtd').value = i.qtd || 0;
-        editingEstoqueIndex = idx;
-        mostrarFormEstoque();
-        document.querySelectorAll('#tab-estoque .edit-only').forEach(e => e.style.display = 'flex');
-        document.getElementById('btn-save-est').innerText = "ATUALIZAR";
-    }
-
-    function cancelarEdicao() {
-        editingEstoqueIndex = null;
-        document.getElementById('form-estoque').style.display = 'none';
-        document.querySelectorAll('#tab-estoque .edit-only').forEach(e => e.style.display = 'none');
-        document.getElementById('btn-save-est').innerText = "SALVAR";
-        ['est-desc','est-unid','est-ncm','est-cfop','est-cst','est-ipi','est-icms','est-compra','est-markup','est-val','est-qtd'].forEach(id => document.getElementById(id).value = '');
-    }
-
-    function calcularPrecoVenda() {
-        const c = parseFloat(document.getElementById('est-compra').value) || 0;
-        const m = parseFloat(document.getElementById('est-markup').value) || 0;
-        document.getElementById('est-val').value = (c + (c * (m/100))).toFixed(2);
-    }
-
-    function addCliente() {
-        const c = {
-            nome: document.getElementById('cli-nome').value.trim(),
-            razao: document.getElementById('cli-razao').value.trim(),
-            tipo: document.getElementById('cli-tipo').value,
-            doc: document.getElementById('cli-doc').value.trim(),
-            tel: document.getElementById('cli-tel').value.trim(),
-            email: document.getElementById('cli-email').value.trim(),
-            end: document.getElementById('cli-end').value.trim(),
-            cidade: document.getElementById('cli-cidade').value.trim(),
-            uf: document.getElementById('cli-uf').value,
-            ultima_compra: editingClienteIndex !== null ? db.clientes[editingClienteIndex].ultima_compra : '---'
-        };
-        if(!c.nome) return;
-        if(editingClienteIndex !== null) db.clientes[editingClienteIndex] = c;
-        else db.clientes.push(c);
-        cancelarEdicaoCliente(); save();
-    }
-
-    function editCliente(idx) {
-        const c = db.clientes[idx];
-        document.getElementById('cli-nome').value = c.nome;
-        document.getElementById('cli-razao').value = c.razao;
-        document.getElementById('cli-tipo').value = c.tipo;
-        document.getElementById('cli-doc').value = c.doc;
-        document.getElementById('cli-tel').value = c.tel;
-        document.getElementById('cli-email').value = c.email;
-        document.getElementById('cli-end').value = c.end;
-        document.getElementById('cli-cidade').value = c.cidade;
-        document.getElementById('cli-uf').value = c.uf;
-        editingClienteIndex = idx;
-        mostrarFormCliente();
-        document.getElementById('btn-save-cli').innerText = "ATUALIZAR";
-    }
-
-    function cancelarEdicaoCliente() {
-        editingClienteIndex = null;
-        document.getElementById('form-cliente').style.display = 'none';
-        document.getElementById('btn-save-cli').innerText = "SALVAR";
-        ['cli-nome','cli-razao','cli-doc','cli-tel','cli-email','cli-end','cli-cidade'].forEach(id => document.getElementById(id).value = '');
-    }
-
-    function filterItems() {
-        const term = document.getElementById('orc-search').value.toUpperCase();
-        const sel = document.getElementById('orc-item-sel');
-        sel.innerHTML = '<option value="">Pesquise...</option>';
-        db.estoque.filter(i => i.desc.toUpperCase().includes(term)).forEach(i => {
-            sel.innerHTML += `<option value="${i.desc}">${i.desc} (R$ ${i.val.toFixed(2)})</option>`;
+    function renderEstoque(f) {
+        const corpo = document.getElementById('tbl-estoque-corpo');
+        if(!corpo) return;
+        corpo.innerHTML = '';
+        const search = document.getElementById('search-est-input').value.toUpperCase();
+        db.estoque.forEach((item, idx) => {
+            if(f !== 'all' && search && !item.desc.toUpperCase().includes(search)) return;
+            corpo.innerHTML += `<tr>
+                <td>${item.desc}</td>
+                <td>${item.unid}</td>
+                <td>${item.ncm}</td>
+                <td>${item.cfop}</td>
+                <td>R$ ${item.val.toFixed(2)}</td>
+                <td style="font-weight:bold; color:${item.qtd < 5 ? 'red' : 'green'}">${item.qtd}</td>
+                <td class="no-print">
+                    <button class="btn btn-edit" onclick="editEstItem(${idx})">✏️</button>
+                    <button class="btn btn-del" onclick="if(confirm('Excluir?')){db.estoque.splice(${idx},1);save();}">🗑️</button>
+                </td>
+            </tr>`;
         });
     }
 
-    function addItemOrc() {
-        const valSel = document.getElementById('orc-item-sel').value;
-        const qtd = parseInt(document.getElementById('orc-qtd-sel').value) || 1;
-        const prod = db.estoque.find(p => p.desc === valSel);
-        if(prod) { db.orc_temp.push({id: Date.now(), desc: prod.desc, val: prod.val, qtd: qtd}); save(); }
-    }
-
-    function novoOrcamento() {
-        if(confirm("Limpar orçamento atual?")) {
-            db.orc_temp = [];
-            document.getElementById('orc-cli-sel').value = "";
-            ['orc-perc-acess','orc-mo-fixo','orc-perc-mo'].forEach(id => document.getElementById(id).value = '');
-            save();
+    function renderClientes(f) {
+        const corpo = document.getElementById('tbl-clientes-corpo');
+        if(!corpo) return;
+        corpo.innerHTML = '';
+        const search = document.getElementById('search-cli-input').value.toUpperCase();
+        db.clientes.forEach((c, idx) => {
+            if(search && !c.nome.toUpperCase().includes(search)) return;
+            corpo.innerHTML += `<tr>
+                <td><strong>${c.nome}</strong><br><small>${c.doc}</small></td>
+                <td>${c.tel}</td>
+                <td>${c.cidade}/${c.uf}</td>
+                <td>${c.ultima_compra || '---'}</td>
+                <td class="no-print">
+                    <button class="btn btn-edit" onclick="editCliente(${idx})">✏️</button>
+                </td>
+            </tr>`;
+        });
+        const sel = document.getElementById('orc-cli-sel');
+        if(sel) {
+            const valAnterior = sel.value;
+            sel.innerHTML = '<option value="">Selecionar Cliente</option>';
+            db.clientes.forEach(c => sel.innerHTML += `<option value="${c.nome}">${c.nome}</option>`);
+            sel.value = valAnterior;
         }
     }
 
-    function calculateTotal() {
-        let mat = 0;
-        db.orc_temp.forEach(o => mat += (o.val * o.qtd));
-        const acess = mat * ((parseFloat(document.getElementById('orc-perc-acess').value) || 0)/100);
-        const mo = (parseFloat(document.getElementById('orc-mo-fixo').value) || 0) + (mat * ((parseFloat(document.getElementById('orc-perc-mo').value) || 0)/100));
-        const total = mat + acess + mo;
-        document.getElementById('res-materiais').innerText = `R$ ${mat.toFixed(2)}`;
-        document.getElementById('res-acessorios').innerText = `R$ ${acess.toFixed(2)}`;
-        document.getElementById('res-mo').innerText = `R$ ${mo.toFixed(2)}`;
+    function renderOrcamento() {
+        const corpo = document.getElementById('orc-lista-corpo');
+        if(!corpo) return;
+        corpo.innerHTML = '';
+        let total = 0;
+        db.orc_temp.forEach((it, idx) => {
+            const sub = it.val * it.qtd;
+            total += sub;
+            corpo.innerHTML += `<tr>
+                <td>${it.qtd}</td>
+                <td>${it.desc}</td>
+                <td>R$ ${it.val.toFixed(2)}</td>
+                <td>R$ ${sub.toFixed(2)}</td>
+                <td class="no-print"><button class="btn btn-del" onclick="db.orc_temp.splice(${idx},1);save();">X</button></td>
+            </tr>`;
+        });
+        document.getElementById('res-materiais').innerText = `R$ ${total.toFixed(2)}`;
         document.getElementById('res-total-final').innerText = `R$ ${total.toFixed(2)}`;
-        const cli = document.getElementById('orc-cli-sel').value;
-        document.getElementById('orc-info-cliente').innerText = cli ? "CLIENTE: " + cli : "";
-        db.config_temp = { acess: (parseFloat(document.getElementById('orc-perc-acess').value) || 0), mo_fixo: (parseFloat(document.getElementById('orc-mo-fixo').value) || 0), mo_perc: (parseFloat(document.getElementById('orc-perc-mo').value) || 0), cliente: cli };
-        return total;
     }
 
-    function finalizarERegistrar() {
-        const cli = document.getElementById('orc-cli-sel').value;
-        if(!cli || db.orc_temp.length === 0) return alert("Selecione cliente e itens!");
-        db.historico.push({ id: Date.now(), data: new Date().toLocaleString(), cliente: cli, total: calculateTotal(), status: 'Pendente', itens: [...db.orc_temp], config: {...db.config_temp} });
-        const cObj = db.clientes.find(c => c.nome === cli);
-        if(cObj) cObj.ultima_compra = new Date().toLocaleString();
-        db.orc_temp = []; save(); alert("Orçamento registrado!");
+    function renderHistorico() {
+        const corpo = document.getElementById('tbl-historico-corpo');
+        if(!corpo) return;
+        corpo.innerHTML = '';
+        db.historico.slice().reverse().forEach(h => {
+            corpo.innerHTML += `<tr>
+                <td>${h.data}</td>
+                <td>${h.cliente}</td>
+                <td>R$ ${h.total.toFixed(2)}</td>
+                <td>${h.status}</td>
+                <td><button class="btn btn-edit" onclick="alert('Funcionalidade em desenvolvimento')">VER</button></td>
+            </tr>`;
+        });
     }
 
-    function updateStatus(id, newStatus) {
-        const h = db.historico.find(x => x.id === id);
-        if(h && h.status !== newStatus) {
-            if(newStatus === 'Aprovado') {
-                if(confirm("Confirmar aprovação e baixa de estoque?")) {
-                    h.itens.forEach(it => {
-                        const p = db.estoque.find(e => e.desc === it.desc);
-                        if(p) { p.qtd -= it.qtd; db.movimentacoes.push({data: new Date().toLocaleString(), produto: it.desc, qtd: it.qtd, destino: h.cliente}); }
-                    });
-                    h.status = 'Aprovado';
-                } else { render(); return; }
-            } else { h.status = newStatus; }
-            save();
-        }
+    function renderUsers() {
+        const corpo = document.getElementById('tbl-users-corpo');
+        if(!corpo) return;
+        corpo.innerHTML = '';
+        db.users.forEach(u => {
+            corpo.innerHTML += `<tr><td>${u.user}</td><td>${u.level}</td><td>-</td></tr>`;
+        });
     }
 
-    function addNewUser() {
-        const u = document.getElementById('new-user').value.trim();
-        const p = document.getElementById('new-pass').value.trim();
-        if(u && p) {
-            db.users.push({user: u, pass: p, level: 'comum'});
-            document.getElementById('new-user').value = '';
-            document.getElementById('new-pass').value = '';
-            save();
-        }
+    // CRUD ESTOQUE E CLIENTES (BASICO)
+    function mostrarFormEstoque() { document.getElementById('form-estoque').style.display = 'grid'; }
+    function mostrarFormCliente() { document.getElementById('form-cliente').style.display = 'grid'; }
+    function cancelarEdicao() { document.getElementById('form-estoque').style.display = 'none'; }
+    function cancelarEdicaoCliente() { document.getElementById('form-cliente').style.display = 'none'; }
+
+    function addEstoque() {
+        const item = {
+            desc: document.getElementById('est-desc').value,
+            unid: document.getElementById('est-unid').value,
+            val: parseFloat(document.getElementById('est-val').value) || 0,
+            qtd: parseInt(document.getElementById('est-qtd').value) || 0,
+            ncm: document.getElementById('est-ncm').value,
+            cfop: document.getElementById('est-cfop').value
+        };
+        db.estoque.push(item);
+        save();
+        cancelarEdicao();
     }
 
     function refreshTemperature() {
@@ -530,7 +451,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `ASB_GESTAO_BACKUP_${new Date().toLocaleDateString()}.json`;
+        a.download = `ASB_BACKUP.json`;
         a.click();
     }
 
@@ -539,63 +460,12 @@
         reader.onload = function() {
             db = JSON.parse(reader.result);
             save();
-            alert("Backup Importado e Sincronizado com a Nuvem!");
+            alert("Sincronizado!");
         };
         reader.readAsText(input.files[0]);
     }
 
-    function limparHistoricoGeral() {
-        if(confirm("Deseja realmente apagar todo o histórico e logs?")) {
-            db.historico = [];
-            db.movimentacoes = [];
-            save();
-        }
-    }
-
-    function render(mode = 'search') {
-        const bEst = document.getElementById('tbl-estoque-corpo'); bEst.innerHTML = '';
-        const sEst = document.getElementById('search-est-input').value.toUpperCase();
-        db.estoque.forEach((i, idx) => {
-            if(mode === 'all' || (sEst && i.desc.toUpperCase().includes(sEst)) || !sEst) {
-                bEst.innerHTML += `<tr><td>${i.desc}</td><td>${i.unid || '-'}</td><td>${i.ncm || '-'}</td><td>${i.cfop || '-'}</td><td>R$ ${i.val.toFixed(2)}</td><td>${i.qtd}</td><td class="no-print"><button class="btn btn-edit" onclick="editEstItem(${idx})">EDITAR</button> <button class="btn btn-del" onclick="if(confirm('Excluir?')){db.estoque.splice(${idx},1);save();}">X</button></td></tr>`;
-            }
-        });
-
-        const bCli = document.getElementById('tbl-clientes-corpo'); bCli.innerHTML = '';
-        const sCli = document.getElementById('search-cli-input').value.toUpperCase();
-        db.clientes.forEach((c, idx) => {
-            if(mode === 'all' || (sCli && (c.nome.toUpperCase().includes(sCli) || c.doc.includes(sCli))) || !sCli) {
-                bCli.innerHTML += `<tr><td><strong>${c.nome}</strong><br><small>${c.doc}</small></td><td>${c.tel}</td><td>${c.cidade}/${c.uf}</td><td>${c.ultima_compra}</td><td class="no-print"><button class="btn btn-edit" onclick="editCliente(${idx})">EDITAR</button> <button class="btn btn-del" onclick="if(confirm('Excluir?')){db.clientes.splice(${idx},1);save();}">X</button></td></tr>`;
-            }
-        });
-
-        const selC = document.getElementById('orc-cli-sel'); selC.innerHTML = '<option value="">Selecionar Cliente</option>';
-        db.clientes.forEach(c => selC.innerHTML += `<option value="${c.nome}" ${db.config_temp.cliente === c.nome ? 'selected' : ''}>${c.nome}</option>`);
-
-        const bOrc = document.getElementById('orc-lista-corpo'); bOrc.innerHTML = '';
-        db.orc_temp.forEach(o => bOrc.innerHTML += `<tr><td>${o.qtd}</td><td>${o.desc}</td><td>R$ ${o.val.toFixed(2)}</td><td>R$ ${(o.val*o.qtd).toFixed(2)}</td><td class="no-print"><button class="btn btn-del" onclick="db.orc_temp = db.orc_temp.filter(x => x.id !== ${o.id});save()">X</button></td></tr>`);
-        
-        const bHist = document.getElementById('tbl-historico-corpo'); bHist.innerHTML = '';
-        const sHist = document.getElementById('search-hist').value.toUpperCase();
-        db.historico.slice().reverse().forEach(h => {
-            if(!sHist || h.cliente.toUpperCase().includes(sHist)) {
-                bHist.innerHTML += `<tr><td>${h.data}</td><td>${h.cliente}</td><td>R$ ${h.total.toFixed(2)}</td><td><select onchange="updateStatus(${h.id}, this.value)"><option ${h.status==='Pendente'?'selected':''}>Pendente</option><option ${h.status==='Aprovado'?'selected':''}>Aprovado</option><option ${h.status==='Cancelado'?'selected':''}>Cancelado</option></select></td><td><button class="btn btn-del" onclick="if(confirm('Excluir histórico?')){db.historico = db.historico.filter(x => x.id !== ${h.id});save();}">X</button></td></tr>`;
-            }
-        });
-
-        const bLog = document.getElementById('tbl-log-corpo'); bLog.innerHTML = '';
-        db.movimentacoes.slice().reverse().forEach(m => {
-            bLog.innerHTML += `<tr><td>${m.data}</td><td>${m.produto}</td><td>${m.qtd}</td><td>${m.destino}</td></tr>`;
-        });
-
-        const bUser = document.getElementById('tbl-users-corpo'); bUser.innerHTML = '';
-        db.users.forEach((u, idx) => {
-            bUser.innerHTML += `<tr><td>${u.user}</td><td>${u.level}</td><td>${u.level !== 'master' ? `<button class="btn btn-del" onclick="db.users.splice(${idx},1);save();">X</button>` : ''}</td></tr>`;
-        });
-
-        calculateTotal();
-    }
+    // v69.0
 </script>
-
 </body>
 </html>
