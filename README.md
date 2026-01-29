@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#1a1a1a">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Gestão ASB ENG - v79.0</title>
+    <title>Gestão ASB ENG - v81.0</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
@@ -98,7 +98,7 @@
         <input type="text" id="user-input" placeholder="Usuário" style="margin-bottom:15px;">
         <input type="password" id="pass-input" placeholder="Senha" style="margin-bottom:25px;">
         <button class="btn btn-add" id="btn-login" style="width: 100%; height:50px;" onclick="handleLogin()">ACESSAR GESTÃO</button>
-        <div id="login-status" style="font-size: 10px; color: #999; margin-top: 10px;">Verificando conexão...</div>
+        <div id="login-status" style="font-size: 10px; color: #999; margin-top: 10px;">Verificando Nuvem...</div>
     </div>
 </div>
 
@@ -106,7 +106,7 @@
     <div class="container">
         <header>
             <div class="logo">
-                <h1>ASB <span>AUTOMAÇÃO</span> <span id="sync-indicator" class="sync-badge">Sincronizando...</span></h1>
+                <h1>ASB <span>AUTOMAÇÃO</span> <span id="sync-indicator" class="sync-badge">Conectando...</span></h1>
                 <div style="font-size: 12px; color: #666; margin-top: 5px;">
                     Temperatura: <span id="temp-val">--°C</span>
                     <button class="temp-refresh-btn no-print" onclick="refreshTemperature()">ATUALIZAR ⚙️</button>
@@ -265,7 +265,7 @@
 </div>
 
 <script>
-    // FIREBASE CONFIG - v79.0
+    // CONFIGURAÇÃO FIREBASE - v81.0
     const firebaseConfig = {
         apiKey: "AIzaSyA8rHSh4HW_bSVzccYPb49aQJ5QlvakAKo",
         authDomain: "asb-sistema.firebaseapp.com",
@@ -279,82 +279,55 @@
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
     
-    // ROTA DE DADOS PRINCIPAL
-    const DB_PATH = 'sistema_asb_v79_master';
-    let db = { users:[{user:'admin', pass:'asb123', level:'master'}], estoque:[], clientes:[], orc_temp:[], historico:[], movimentacoes:[], config_temp:{} };
+    // NÓ DE DADOS REALTIME
+    const DB_PATH = 'asb_cloud_master_v81';
+    let db = { users:[{user:'admin', pass:'asb123', level:'master'}], estoque:[], clientes:[], orc_temp:[], historico:[], movimentacoes:[] };
     
     let editingEstoqueIndex = null;
     let editingClienteIndex = null;
 
-    // --- SINCRONIA EM TEMPO REAL ---
-    function startSync() {
+    // --- FUNÇÃO DE SINCRONISMO REALTIME ---
+    // Esta é a alma da nuvem: .on('value') faz o navegador "ouvir" a nuvem
+    function initCloud() {
         database.ref(DB_PATH).on('value', (snapshot) => {
-            const data = snapshot.val();
-            const ind = document.getElementById('sync-indicator');
-            if (data) {
-                db = data;
-                if(ind) { ind.innerText = "Online (Nuvem)"; ind.className = 'sync-badge sync-online'; }
-                render();
+            const val = snapshot.val();
+            if(val) {
+                db = val;
+                if(!db.users) db.users = [{user:'admin', pass:'asb123', level:'master'}];
+                document.getElementById('sync-indicator').innerText = "Nuvem Ativa";
+                document.getElementById('sync-indicator').className = 'sync-badge sync-online';
+                render(); // Atualiza a tela de todos que estão com o sistema aberto
             } else {
-                // Caso banco esteja vazio, garante admin
-                if(!db.users || db.users.length === 0) db.users = [{user:'admin', pass:'asb123', level:'master'}];
+                save(); // Cria o banco se estiver vazio
             }
-        }, (error) => {
-            const ind = document.getElementById('sync-indicator');
-            if(ind) { ind.innerText = "Erro Sincronia"; ind.className = 'sync-badge sync-offline'; }
         });
     }
 
-    startSync();
+    // Inicia a escuta da nuvem antes de qualquer coisa
+    initCloud();
 
-    function save() { 
-        database.ref(DB_PATH).update(db).then(() => {
-            console.log("Nuvem atualizada e sincronizada.");
-        }).catch(err => {
-            console.error("Erro ao salvar:", err);
-            alert("Erro de conexão. Verifique a rede.");
-        });
-    }
-
-    function forceRealtimeSync() {
-        database.ref(DB_PATH).once('value').then(s => {
-            if(s.exists()){
-                db = s.val();
-                render();
-                alert("Canal de dados restaurado!");
-            }
-        });
+    function save() {
+        // Envia o estado atual do 'db' para o Firebase
+        database.ref(DB_PATH).set(db).catch(e => console.error("Erro ao salvar nuvem", e));
     }
 
     // --- LOGIN ---
     function handleLogin() {
         const u = document.getElementById('user-input').value.toLowerCase().trim();
         const p = document.getElementById('pass-input').value.trim();
-        const status = document.getElementById('login-status');
         
-        status.innerText = "Autenticando...";
-        
-        database.ref(DB_PATH).once('value').then(snap => {
-            const cloud = snap.val();
-            if(cloud) db = cloud;
-
-            const found = db.users.find(x => x.user.toLowerCase() === u && x.pass === p);
-            if(found || (u === 'admin' && p === 'asb123')) {
-                logarSucesso(u, found ? found.level : 'master');
-            } else {
-                alert("Usuário ou senha inválidos.");
-                status.innerText = "Acesso negado.";
-            }
-        });
-    }
-
-    function logarSucesso(user, level) {
-        document.getElementById('login-screen').style.display = 'none';
-        document.getElementById('main-app').style.display = 'block';
-        document.getElementById('welcome-msg').innerText = `Olá, ${user.toUpperCase()}`;
-        if(level === 'master') document.getElementById('nav-master').style.display = 'block';
-        refreshTemperature();
-        render();
+        // No login, verificamos os usuários que vieram da nuvem (db.users)
+        const found = db.users.find(x => x.user.toLowerCase() === u && x.pass === p);
+        if((u === 'admin' && p === 'asb123') || found) {
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('main-app').style.display = 'block';
+            document.getElementById('welcome-msg').innerText = `Logado: ${u.toUpperCase()}`;
+            if((found && found.level === 'master') || u === 'admin') document.getElementById('nav-master').style.display = 'block';
+            refreshTemperature();
+            render();
+        } else {
+            alert("Usuário ou Senha incorretos.");
+        }
     }
 
     // --- NAVEGAÇÃO ---
@@ -386,7 +359,7 @@
         if(!db.estoque) db.estoque = [];
         if(editingEstoqueIndex !== null) db.estoque[editingEstoqueIndex] = item;
         else db.estoque.push(item);
-        cancelarEdicao(); save();
+        cancelarEdicao(); save(); // 'save' dispara a atualização em todos os dispositivos
     }
 
     function editEstItem(idx) {
@@ -510,7 +483,6 @@
         document.getElementById('res-total-final').innerText = `R$ ${total.toFixed(2)}`;
         const cli = document.getElementById('orc-cli-sel').value;
         document.getElementById('orc-info-cliente').innerText = cli ? "CLIENTE: " + cli : "";
-        db.config_temp = { acess: (parseFloat(document.getElementById('orc-perc-acess').value) || 0), mo_fixo: (parseFloat(document.getElementById('orc-mo-fixo').value) || 0), mo_perc: (parseFloat(document.getElementById('orc-perc-mo').value) || 0), cliente: cli };
         return total;
     }
 
@@ -518,10 +490,10 @@
         const cli = document.getElementById('orc-cli-sel').value;
         if(!cli || !db.orc_temp || db.orc_temp.length === 0) return alert("Selecione cliente e adicione itens!");
         if(!db.historico) db.historico = [];
-        db.historico.push({ id: Date.now(), data: new Date().toLocaleString(), cliente: cli, total: calculateTotal(), status: 'Pendente', itens: [...db.orc_temp], config: {...db.config_temp} });
+        db.historico.push({ id: Date.now(), data: new Date().toLocaleString(), cliente: cli, total: calculateTotal(), status: 'Pendente', itens: [...db.orc_temp] });
         const cObj = db.clientes.find(c => c.nome === cli);
         if(cObj) cObj.ultima_compra = new Date().toLocaleString();
-        db.orc_temp = []; save(); alert("Orçamento salvo no histórico!");
+        db.orc_temp = []; save(); alert("Orçamento registrado!");
     }
 
     function updateStatus(id, newStatus) {
@@ -567,7 +539,7 @@
         const blob = new Blob([JSON.stringify(db)], {type: 'application/json'});
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a'); a.href = url;
-        a.download = `ASB_BACKUP_${new Date().toLocaleDateString()}.json`;
+        a.download = `ASB_BACKUP_v81.json`;
         a.click();
     }
 
@@ -576,21 +548,26 @@
         reader.onload = function() {
             try {
                 const imported = JSON.parse(reader.result);
-                if(confirm("Deseja substituir os dados da nuvem por este arquivo?")) {
-                    db = imported; save(); alert("Dados importados!");
+                if(confirm("Substituir dados atuais?")) {
+                    db = imported; save(); alert("Importação completa!");
                 }
-            } catch(e) { alert("Erro ao ler JSON."); }
+            } catch(e) { alert("JSON Inválido."); }
         };
         reader.readAsText(input.files[0]);
     }
 
     function limparHistoricoGeral() {
-        if(confirm("AVISO: Apagar todo histórico e logs permanentemente?")) {
+        if(confirm("Deseja apagar histórico e logs?")) {
             db.historico = []; db.movimentacoes = []; save();
         }
     }
 
-    // --- RENDERIZAÇÃO CENTRALIZADA ---
+    function forceRealtimeSync() {
+        initCloud();
+        alert("Canal Cloud Reiniciado.");
+    }
+
+    // --- RENDERIZAÇÃO CENTRALIZADA (Chamada toda vez que a nuvem muda) ---
     function render(filter) {
         if(!db) return;
 
@@ -618,7 +595,7 @@
             });
         }
 
-        // Dropdown Clientes no Orçamento
+        // Dropdown Clientes
         const orcCliSel = document.getElementById('orc-cli-sel');
         if(orcCliSel && db.clientes) {
             const current = orcCliSel.value;
@@ -645,7 +622,7 @@
             const s = document.getElementById('search-hist').value.toUpperCase();
             if(db.historico) db.historico.slice().reverse().forEach((h) => {
                 if(h.cliente.toUpperCase().includes(s)) {
-                    histTbody.innerHTML += `<tr><td>${h.data}</td><td>${h.cliente}</td><td>R$ ${parseFloat(h.total).toFixed(2)}</td><td><select onchange="updateStatus(${h.id}, this.value)" style="width:auto; padding:5px;"><option ${h.status==='Pendente'?'selected':''}>Pendente</option><option ${h.status==='Aprovado'?'selected':''}>Aprovado</option><option ${h.status==='Cancelado'?'selected':''}>Cancelado</option></select></td><td><button class="btn btn-new" onclick="alert('Funcionalidade de Detalhes em desenvolvimento.')">VER</button></td></tr>`;
+                    histTbody.innerHTML += `<tr><td>${h.data}</td><td>${h.cliente}</td><td>R$ ${parseFloat(h.total).toFixed(2)}</td><td><select onchange="updateStatus(${h.id}, this.value)" style="width:auto; padding:5px;"><option ${h.status==='Pendente'?'selected':''}>Pendente</option><option ${h.status==='Aprovado'?'selected':''}>Aprovado</option><option ${h.status==='Cancelado'?'selected':''}>Cancelado</option></select></td><td><button class="btn btn-new" onclick="alert('Relatório Detalhado em Breve')">VER</button></td></tr>`;
                 }
             });
         }
@@ -668,8 +645,6 @@
             });
         }
     }
-
-    window.onload = () => { render(); };
 
 </script>
 </body>
