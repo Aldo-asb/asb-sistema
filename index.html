@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#1a1a1a">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Gestão ASB ENG - v96.0</title>
+    <title>Gestão ASB ENG - v98.0</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
@@ -284,7 +284,7 @@
 </div>
 
 <script>
-    // CONFIGURAÇÃO FIREBASE - v96.0
+    // CONFIGURAÇÃO FIREBASE - v98.0
     const firebaseConfig = {
         apiKey: "AIzaSyA8rHSh4HW_bSVzccYPb49aQJ5QlvakAKo",
         authDomain: "asb-sistema.firebaseapp.com",
@@ -465,8 +465,6 @@
         document.getElementById('btn-save-cli').innerText = "SALVAR";
     }
 
-    // --- FUNÇÕES DE ORÇAMENTO v96.0 ---
-
     function mostrarAreaOrcamento() {
         document.getElementById('orc-search-area').style.display = 'none';
         document.getElementById('orc-form-container').style.display = 'block';
@@ -541,39 +539,16 @@
                     <b>RAZÃO SOCIAL:</b> ${cObj.razao} | <b>CPF/CNPJ:</b> ${cObj.doc} <br>
                     <b>CONTATO:</b> ${cObj.tel} | <b>E-MAIL:</b> ${cObj.email} <br>
                     <b>ENDEREÇO:</b> ${cObj.end}, ${cObj.cidade} - ${cObj.uf}
-                </div>
-            `;
-        } else {
-            infoDiv.innerText = cli ? "CLIENTE: " + cli : "";
+                </div>`;
         }
         return total;
-    }
-
-    function editarOrc(id) {
-        const orc = db.historico.find(h => h.id === id);
-        if(orc) {
-            db.orc_temp = [...orc.itens];
-            currentEditingOrcId = orc.id;
-            openTab('tab-orcamento', document.querySelectorAll('.nav-btn')[2]);
-            mostrarAreaOrcamento();
-
-            document.getElementById('orc-cli-sel').value = orc.cliente;
-            document.getElementById('orc-perc-acess').value = orc.perc_acess || 0;
-            document.getElementById('orc-mo-fixo').value = orc.mo_fixo || 0;
-            document.getElementById('orc-perc-mo').value = orc.perc_mo || 0;
-            
-            calculateTotal();
-            render();
-            document.getElementById('btn-finalizar-orc').innerText = "ATUALIZAR NO HISTÓRICO";
-        }
     }
 
     function finalizarERegistrar() {
         const cli = document.getElementById('orc-cli-sel').value;
         if(!cli || db.orc_temp.length === 0) return alert("Selecione cliente e adicione itens!");
-        
         const orcData = { 
-            id: currentEditingOrcId || Date.now(), 
+            id: Date.now(), 
             data: new Date().toLocaleString(), 
             cliente: cli, 
             total: calculateTotal(), 
@@ -583,17 +558,26 @@
             mo_fixo: document.getElementById('orc-mo-fixo').value,
             perc_mo: document.getElementById('orc-perc-mo').value
         };
-
-        if(currentEditingOrcId) {
-            const idx = db.historico.findIndex(h => h.id === currentEditingOrcId);
-            db.historico[idx] = orcData;
-        } else {
-            db.historico.push(orcData);
-        }
-
+        db.historico.push(orcData);
         save();
         alert("Salvo com sucesso!");
         voltarParaBuscaOrc();
+    }
+
+    function addNewUser() {
+        const user = document.getElementById('new-user').value.toLowerCase().trim();
+        const pass = document.getElementById('new-pass').value.trim();
+        if(!user || !pass) return alert("Preencha usuário e senha!");
+        db.users.push({user, pass, level: 'vendedor'});
+        save();
+        document.getElementById('new-user').value = '';
+        document.getElementById('new-pass').value = '';
+        render();
+    }
+
+    function delUser(idx) {
+        if(db.users[idx].user === 'admin') return alert("Admin não pode ser removido!");
+        if(confirm("Excluir usuário?")) { db.users.splice(idx, 1); save(); }
     }
 
     function render(filter = '') {
@@ -607,8 +591,8 @@
 
         const tCli = document.getElementById('tbl-clientes-corpo'); tCli.innerHTML='';
         const sCli = document.getElementById('orc-cli-sel'); 
-        const valSel = sCli.value;
         const searchCli = document.getElementById('search-cli-input').value.toUpperCase();
+        const currentSel = sCli.value;
         sCli.innerHTML = '<option value="">Selecionar Cliente</option>';
         db.clientes.forEach((c, idx) => {
             if(filter === 'all' || c.nome.toUpperCase().includes(searchCli)) {
@@ -616,7 +600,7 @@
             }
             sCli.innerHTML += `<option value="${c.nome}">${c.nome}</option>`;
         });
-        sCli.value = valSel;
+        sCli.value = currentSel;
 
         const tOrc = document.getElementById('orc-lista-corpo'); tOrc.innerHTML='';
         db.orc_temp.forEach((o, idx) => {
@@ -624,16 +608,13 @@
         });
 
         const tHist = document.getElementById('tbl-historico-corpo'); tHist.innerHTML='';
-        const searchHist = document.getElementById('search-hist').value.toUpperCase();
         [...db.historico].reverse().forEach(h => {
-            if(h.cliente.toUpperCase().includes(searchHist)) {
-                tHist.innerHTML += `<tr><td>${h.data}</td><td>${h.cliente}</td><td>R$ ${h.total.toFixed(2)}</td><td>${h.status}</td><td class="no-print"><button class="btn btn-edit" onclick="editarOrc(${h.id})">VER</button></td></tr>`;
-            }
+            tHist.innerHTML += `<tr><td>${h.data}</td><td>${h.cliente}</td><td>R$ ${h.total.toFixed(2)}</td><td>${h.status}</td><td class="no-print"><button class="btn btn-edit">VER</button></td></tr>`;
         });
 
-        const tLog = document.getElementById('tbl-log-corpo'); tLog.innerHTML='';
-        [...db.movimentacoes].reverse().forEach(m => {
-            tLog.innerHTML += `<tr><td>${m.data}</td><td>${m.prod}</td><td>${m.qtd}</td><td>${m.destino}</td></tr>`;
+        const tUsers = document.getElementById('tbl-users-corpo'); tUsers.innerHTML='';
+        db.users.forEach((u, idx) => {
+            tUsers.innerHTML += `<tr><td>${u.user}</td><td>${u.level}</td><td><button class="btn btn-del" onclick="delUser(${idx})">X</button></td></tr>`;
         });
     }
 
@@ -647,31 +628,20 @@
 
     function exportDB() {
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db));
-        const downloadAnchorNode = document.createElement('a');
-        downloadAnchorNode.setAttribute("href", dataStr);
-        downloadAnchorNode.setAttribute("download", "asb_backup_" + Date.now() + ".json");
-        document.body.appendChild(downloadAnchorNode);
-        downloadAnchorNode.click();
-        downloadAnchorNode.remove();
+        const a = document.createElement('a'); a.href = dataStr; a.download = "asb_backup.json"; a.click();
     }
 
     function importDB(input) {
         const reader = new FileReader();
         reader.onload = function(){
-            try {
-                const imported = JSON.parse(reader.result);
-                if(confirm("Deseja substituir os dados da nuvem por este arquivo?")) {
-                    db = imported;
-                    save();
-                    alert("Importado com sucesso!");
-                }
-            } catch(e) { alert("Erro no arquivo!"); }
+            db = JSON.parse(reader.result);
+            save(); alert("Importado!");
         };
         reader.readAsText(input.files[0]);
     }
 
     function forceRealtimeSync() { initCloud(); alert("Canal reiniciado!"); }
-    function limparHistoricoGeral() { if(confirm("Apagar histórico e logs?")) { db.historico = []; db.movimentacoes = []; save(); } }
+    function limparHistoricoGeral() { if(confirm("Apagar histórico?")) { db.historico = []; save(); } }
 </script>
 </body>
 </html>
