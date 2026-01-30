@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#1a1a1a">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Gestão ASB ENG - v86.0</title>
+    <title>Gestão ASB ENG - v87.0</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
@@ -265,7 +265,7 @@
 </div>
 
 <script>
-    // CONFIGURAÇÃO FIREBASE - v86.0
+    // CONFIGURAÇÃO FIREBASE - v87.0
     const firebaseConfig = {
         apiKey: "AIzaSyA8rHSh4HW_bSVzccYPb49aQJ5QlvakAKo",
         authDomain: "asb-sistema.firebaseapp.com",
@@ -469,13 +469,21 @@
         db.orc_temp.splice(idx, 1); save();
     }
 
+    function resetFormOrcamento() {
+        db.orc_temp = [];
+        currentEditingOrcId = null;
+        document.getElementById('btn-finalizar-orc').innerText = "✅ FINALIZAR E SALVAR";
+        document.getElementById('orc-cli-sel').value = "";
+        document.getElementById('orc-search').value = "";
+        document.getElementById('orc-item-sel').innerHTML = '<option value="">Pesquise...</option>';
+        ['orc-perc-acess','orc-mo-fixo','orc-perc-mo'].forEach(id => document.getElementById(id).value = '');
+        document.getElementById('orc-info-cliente').innerHTML = "";
+        render();
+    }
+
     function novoOrcamento() {
-        if(confirm("Limpar orçamento atual?")) {
-            db.orc_temp = [];
-            currentEditingOrcId = null;
-            document.getElementById('btn-finalizar-orc').innerText = "✅ FINALIZAR E SALVAR";
-            document.getElementById('orc-cli-sel').value = "";
-            ['orc-perc-acess','orc-mo-fixo','orc-perc-mo'].forEach(id => document.getElementById(id).value = '');
+        if(confirm("Deseja iniciar um novo orçamento? Isso limpará a tela atual.")) {
+            resetFormOrcamento();
             save();
         }
     }
@@ -534,9 +542,8 @@
         const cObj = db.clientes.find(c => c.nome === cli);
         if(cObj) cObj.ultima_compra = new Date().toLocaleString();
         
-        db.orc_temp = []; 
-        currentEditingOrcId = null;
-        document.getElementById('btn-finalizar-orc').innerText = "✅ FINALIZAR E SALVAR";
+        // Limpa tudo após salvar
+        resetFormOrcamento();
         save();
         alert("Orçamento salvo no Histórico!");
         openTab('tab-relatorios', document.querySelectorAll('.nav-btn')[3]);
@@ -545,13 +552,14 @@
     function editarOrc(id) {
         const orc = db.historico.find(h => h.id === id);
         if(orc) {
+            // Primeiro limpa o estado atual
             db.orc_temp = [...orc.itens];
             currentEditingOrcId = orc.id;
             
-            // Abre a aba de orçamento
+            // Vai para a aba
             openTab('tab-orcamento', document.querySelectorAll('.nav-btn')[2]);
             
-            // Preenche os campos de cliente e taxas
+            // Alimenta os inputs explicitamente
             document.getElementById('orc-cli-sel').value = orc.cliente;
             document.getElementById('orc-perc-acess').value = orc.perc_acess || 0;
             document.getElementById('orc-mo-fixo').value = orc.mo_fixo || 0;
@@ -559,7 +567,6 @@
             
             document.getElementById('btn-finalizar-orc').innerText = "💾 ATUALIZAR ORÇAMENTO";
             
-            // Recalcula totais e renderiza
             calculateTotal();
             render();
             save();
