@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#1a1a1a">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Gestão ASB ENG - v88.0</title>
+    <title>Gestão ASB ENG - v89.0</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
@@ -188,35 +188,42 @@
         </section>
 
         <section id="tab-orcamento" class="section-panel">
-            <div class="form-grid no-print" style="display:grid; grid-template-columns: 2fr 2fr 1fr 1fr auto auto;">
-                <select id="orc-cli-sel" onchange="calculateTotal()"><option value="">Selecionar Cliente</option></select>
-                <input type="text" id="orc-search" placeholder="🔍 Buscar Produto..." onkeyup="filterItems()">
-                <select id="orc-item-sel"><option value="">Pesquise...</option></select>
-                <input type="number" id="orc-qtd-sel" value="1">
-                <button class="btn btn-add" onclick="addItemOrc()">INSERIR</button>
-                <button class="btn btn-new" onclick="novoOrcamento()">NOVO ORÇAMENTO</button>
+            <div class="search-hero no-print" id="orc-search-area">
+                <button class="btn btn-new" onclick="mostrarAreaOrcamento()">NOVO ORÇAMENTO</button>
+                <input type="text" id="orc-search-main" placeholder="🔍 Buscar Orçamento no Histórico..." onkeyup="render()">
             </div>
-            <div class="form-grid no-print" style="display:grid; background:#f0f7ff; border-color: #bcd9f5;">
-                <div class="field-group"><label>Acessórios (%)</label><input type="number" id="orc-perc-acess" oninput="calculateTotal()"></div>
-                <div class="field-group"><label>Mão de Obra (R$)</label><input type="number" id="orc-mo-fixo" oninput="calculateTotal()"></div>
-                <div class="field-group"><label>Mão de Obra (%)</label><input type="number" id="orc-perc-mo" oninput="calculateTotal()"></div>
-            </div>
-            <div id="orc-area">
-                <h2 style="text-align:center; border-bottom: 2px solid #000; padding-bottom:10px;">ORÇAMENTO - ASB AUTOMAÇÃO</h2>
-                <div id="orc-info-cliente" style="margin-bottom: 15px; line-height: 1.6;"></div>
-                <table>
-                    <thead><tr><th>QTD</th><th>DESCRIÇÃO TÉCNICA</th><th>UNITÁRIO</th><th>SUBTOTAL</th><th class="no-print">AÇÃO</th></tr></thead>
-                    <tbody id="orc-lista-corpo"></tbody>
-                </table>
-                <div class="summary-box">
-                    <div class="summary-row"><span>Materiais:</span><strong id="res-materiais">R$ 0.00</strong></div>
-                    <div class="summary-row"><span>Acessórios:</span><strong id="res-acessorios">R$ 0.00</strong></div>
-                    <div class="summary-row"><span>Mão de Obra:</span><strong id="res-mo">R$ 0.00</strong></div>
-                    <div class="summary-row" style="font-size:20px; border-top:2px solid #333; padding-top:15px; color:var(--asb-blue);"><span>TOTAL FINAL:</span><span id="res-total-final" style="font-weight:900;">R$ 0.00</span></div>
+
+            <div id="orc-form-container" style="display:none;">
+                <div class="form-grid no-print" style="display:grid; grid-template-columns: 2fr 2fr 1fr 1fr auto auto;">
+                    <select id="orc-cli-sel" onchange="calculateTotal()"><option value="">Selecionar Cliente</option></select>
+                    <input type="text" id="orc-search" placeholder="🔍 Buscar Produto..." onkeyup="filterItems()">
+                    <select id="orc-item-sel"><option value="">Pesquise...</option></select>
+                    <input type="number" id="orc-qtd-sel" value="1">
+                    <button class="btn btn-add" onclick="addItemOrc()">INSERIR</button>
+                    <button class="btn btn-new" onclick="voltarParaBuscaOrc()">FECHAR / VOLTAR</button>
                 </div>
-                <div class="no-print">
-                    <button class="btn btn-print" onclick="window.print()">🖨️ GERAR PDF / IMPRIMIR</button>
-                    <button class="btn btn-add" style="width:100%; margin-top:10px; height:50px;" id="btn-finalizar-orc" onclick="finalizarERegistrar()">✅ FINALIZAR E SALVAR</button>
+                <div class="form-grid no-print" style="display:grid; background:#f0f7ff; border-color: #bcd9f5;">
+                    <div class="field-group"><label>Acessórios (%)</label><input type="number" id="orc-perc-acess" oninput="calculateTotal()"></div>
+                    <div class="field-group"><label>Mão de Obra (R$)</label><input type="number" id="orc-mo-fixo" oninput="calculateTotal()"></div>
+                    <div class="field-group"><label>Mão de Obra (%)</label><input type="number" id="orc-perc-mo" oninput="calculateTotal()"></div>
+                </div>
+                <div id="orc-area">
+                    <h2 style="text-align:center; border-bottom: 2px solid #000; padding-bottom:10px;">ORÇAMENTO - ASB AUTOMAÇÃO</h2>
+                    <div id="orc-info-cliente" style="margin-bottom: 15px; line-height: 1.6;"></div>
+                    <table>
+                        <thead><tr><th>QTD</th><th>DESCRIÇÃO TÉCNICA</th><th>UNITÁRIO</th><th>SUBTOTAL</th><th class="no-print">AÇÃO</th></tr></thead>
+                        <tbody id="orc-lista-corpo"></tbody>
+                    </table>
+                    <div class="summary-box">
+                        <div class="summary-row"><span>Materiais:</span><strong id="res-materiais">R$ 0.00</strong></div>
+                        <div class="summary-row"><span>Acessórios:</span><strong id="res-acessorios">R$ 0.00</strong></div>
+                        <div class="summary-row"><span>Mão de Obra:</span><strong id="res-mo">R$ 0.00</strong></div>
+                        <div class="summary-row" style="font-size:20px; border-top:2px solid #333; padding-top:15px; color:var(--asb-blue);"><span>TOTAL FINAL:</span><span id="res-total-final" style="font-weight:900;">R$ 0.00</span></div>
+                    </div>
+                    <div class="no-print">
+                        <button class="btn btn-print" onclick="window.print()">🖨️ GERAR PDF / IMPRIMIR</button>
+                        <button class="btn btn-add" style="width:100%; margin-top:10px; height:50px;" id="btn-finalizar-orc" onclick="finalizarERegistrar()">✅ FINALIZAR E SALVAR</button>
+                    </div>
                 </div>
             </div>
         </section>
@@ -265,7 +272,7 @@
 </div>
 
 <script>
-    // CONFIGURAÇÃO FIREBASE - v88.0
+    // CONFIGURAÇÃO FIREBASE - v89.0
     const firebaseConfig = {
         apiKey: "AIzaSyA8rHSh4HW_bSVzccYPb49aQJ5QlvakAKo",
         authDomain: "asb-sistema.firebaseapp.com",
@@ -446,6 +453,19 @@
         document.getElementById('btn-save-cli').innerText = "SALVAR";
     }
 
+    // --- FUNÇÕES DE ORÇAMENTO v89.0 ---
+
+    function mostrarAreaOrcamento() {
+        document.getElementById('orc-search-area').style.display = 'none';
+        document.getElementById('orc-form-container').style.display = 'block';
+    }
+
+    function voltarParaBuscaOrc() {
+        resetFormOrcamento();
+        document.getElementById('orc-search-area').style.display = 'flex';
+        document.getElementById('orc-form-container').style.display = 'none';
+    }
+
     function filterItems() {
         const term = document.getElementById('orc-search').value.toUpperCase();
         const sel = document.getElementById('orc-item-sel');
@@ -482,10 +502,8 @@
     }
 
     function novoOrcamento() {
-        if(confirm("Deseja iniciar um novo orçamento? Isso limpará a tela atual.")) {
-            resetFormOrcamento();
-            save();
-        }
+        resetFormOrcamento();
+        mostrarAreaOrcamento();
     }
 
     function calculateTotal() {
@@ -542,39 +560,30 @@
         const cObj = db.clientes.find(c => c.nome === cli);
         if(cObj) cObj.ultima_compra = new Date().toLocaleString();
         
-        // Limpa tudo após salvar e volta ao estado de busca inicial
-        resetFormOrcamento();
+        voltarParaBuscaOrc(); // Reseta tudo e volta para busca
         save();
-        alert("Orçamento salvo com sucesso!");
-        openTab('tab-relatorios', document.querySelectorAll('.nav-btn')[3]);
+        alert("Operação realizada com sucesso!");
     }
 
     function editarOrc(id) {
         const orc = db.historico.find(h => h.id === id);
         if(orc) {
-            // Garante que a lista temporária receba os itens do histórico
             db.orc_temp = [...orc.itens];
             currentEditingOrcId = orc.id;
             
-            // Vai para a aba de orçamento
             openTab('tab-orcamento', document.querySelectorAll('.nav-btn')[2]);
+            mostrarAreaOrcamento();
             
-            // CARREGAMENTO EXPLÍCITO DE VALORES NO DOM
+            // Injeção imediata de valores
             document.getElementById('orc-cli-sel').value = orc.cliente;
             document.getElementById('orc-perc-acess').value = orc.perc_acess || 0;
             document.getElementById('orc-mo-fixo').value = orc.mo_fixo || 0;
             document.getElementById('orc-perc-mo').value = orc.perc_mo || 0;
             
-            // Limpa campos de busca para evitar confusão
-            document.getElementById('orc-search').value = "";
-            document.getElementById('orc-item-sel').innerHTML = '<option value="">Pesquise...</option>';
-            
             document.getElementById('btn-finalizar-orc').innerText = "💾 ATUALIZAR ORÇAMENTO";
             
-            // Recalcula para garantir que os valores de acessórios e MO apareçam nos totais
             calculateTotal();
             render();
-            save();
         }
     }
 
@@ -668,8 +677,7 @@
                 <td class="no-print"><button class="btn btn-del" onclick="delItemOrc(${idx})">REMOVER</button></td>
             </tr>`;
         });
-        calculateTotal();
-
+        
         // Render Histórico
         const searchHist = document.getElementById('search-hist').value.toUpperCase();
         const tblHist = document.getElementById('tbl-historico-corpo');
