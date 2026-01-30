@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#1a1a1a">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Gestão ASB ENG - v89.0</title>
+    <title>Gestão ASB ENG - v96.0</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
@@ -79,14 +79,26 @@
         .temp-refresh-btn { background: var(--asb-success); color: white; border: none; border-radius: 4px; padding: 5px 10px; cursor: pointer; font-size: 10px; margin-left: 10px; }
 
         @media print {
-            body { background: white; }
+            body { background: white !important; margin: 0; padding: 0; }
             nav, .no-print, .search-hero, header, .form-grid, .btn { display: none !important; }
-            .container { box-shadow: none; border: none; width: 100%; margin: 0; padding: 0; }
-            .section-panel { display: none !important; }
-            #tab-estoque.active, #tab-clientes.active, #tab-orcamento.active { display: block !important; }
+            .container { box-shadow: none; border: none; width: 100% !important; max-width: 100% !important; padding: 0; margin: 0; }
+            #tab-orcamento { display: block !important; visibility: visible !important; }
+            #orc-form-container { display: block !important; }
+            #orc-area { display: block !important; }
+            #orc-info-cliente { 
+                display: block !important; 
+                visibility: visible !important; 
+                border: 2px solid #000 !important; 
+                padding: 15px !important; 
+                margin: 20px 0 !important;
+                background: #fff !important;
+                color: #000 !important;
+            }
+            .summary-box { border: 2px solid #000 !important; background: #fff !important; margin-top: 20px; }
+            table { width: 100% !important; border: 1px solid #000 !important; }
+            th { border-bottom: 1px solid #000 !important; color: #000 !important; font-size: 12px !important; }
+            td { border-bottom: 1px solid #ccc !important; color: #000 !important; font-size: 12px !important; }
             table th:last-child, table td:last-child { display: none !important; }
-            #tab-orcamento.active #orc-area { display: block !important; }
-            .summary-box { border: 1px solid #333; }
         }
     </style>
 </head>
@@ -189,7 +201,7 @@
 
         <section id="tab-orcamento" class="section-panel">
             <div class="search-hero no-print" id="orc-search-area">
-                <button class="btn btn-new" onclick="mostrarAreaOrcamento()">NOVO ORÇAMENTO</button>
+                <button class="btn btn-new" onclick="novoOrcamento()">NOVO ORÇAMENTO</button>
                 <input type="text" id="orc-search-main" placeholder="🔍 Buscar Orçamento no Histórico..." onkeyup="render()">
             </div>
 
@@ -272,7 +284,7 @@
 </div>
 
 <script>
-    // CONFIGURAÇÃO FIREBASE - v89.0
+    // CONFIGURAÇÃO FIREBASE - v96.0
     const firebaseConfig = {
         apiKey: "AIzaSyA8rHSh4HW_bSVzccYPb49aQJ5QlvakAKo",
         authDomain: "asb-sistema.firebaseapp.com",
@@ -453,7 +465,7 @@
         document.getElementById('btn-save-cli').innerText = "SALVAR";
     }
 
-    // --- FUNÇÕES DE ORÇAMENTO v89.0 ---
+    // --- FUNÇÕES DE ORÇAMENTO v96.0 ---
 
     function mostrarAreaOrcamento() {
         document.getElementById('orc-search-area').style.display = 'none';
@@ -481,12 +493,13 @@
         const prod = db.estoque.find(p => p.desc === valSel);
         if(prod) { 
             db.orc_temp.push({id: Date.now(), desc: prod.desc, val: prod.val, qtd: qtd}); 
-            save(); 
+            render();
+            calculateTotal();
         }
     }
 
     function delItemOrc(idx) {
-        db.orc_temp.splice(idx, 1); save();
+        db.orc_temp.splice(idx, 1); render(); calculateTotal();
     }
 
     function resetFormOrcamento() {
@@ -523,15 +536,36 @@
         
         if(cObj) {
             infoDiv.innerHTML = `
-                <b>CLIENTE:</b> ${cObj.nome} <br>
-                <b>RAZÃO SOCIAL:</b> ${cObj.razao} | <b>CPF/CNPJ:</b> ${cObj.doc} <br>
-                <b>CONTATO:</b> ${cObj.tel} | <b>E-MAIL:</b> ${cObj.email} <br>
-                <b>ENDEREÇO:</b> ${cObj.end}, ${cObj.cidade} - ${cObj.uf}
+                <div style="font-size:14px; color:#000;">
+                    <b>CLIENTE:</b> ${cObj.nome} <br>
+                    <b>RAZÃO SOCIAL:</b> ${cObj.razao} | <b>CPF/CNPJ:</b> ${cObj.doc} <br>
+                    <b>CONTATO:</b> ${cObj.tel} | <b>E-MAIL:</b> ${cObj.email} <br>
+                    <b>ENDEREÇO:</b> ${cObj.end}, ${cObj.cidade} - ${cObj.uf}
+                </div>
             `;
         } else {
             infoDiv.innerText = cli ? "CLIENTE: " + cli : "";
         }
         return total;
+    }
+
+    function editarOrc(id) {
+        const orc = db.historico.find(h => h.id === id);
+        if(orc) {
+            db.orc_temp = [...orc.itens];
+            currentEditingOrcId = orc.id;
+            openTab('tab-orcamento', document.querySelectorAll('.nav-btn')[2]);
+            mostrarAreaOrcamento();
+
+            document.getElementById('orc-cli-sel').value = orc.cliente;
+            document.getElementById('orc-perc-acess').value = orc.perc_acess || 0;
+            document.getElementById('orc-mo-fixo').value = orc.mo_fixo || 0;
+            document.getElementById('orc-perc-mo').value = orc.perc_mo || 0;
+            
+            calculateTotal();
+            render();
+            document.getElementById('btn-finalizar-orc').innerText = "ATUALIZAR NO HISTÓRICO";
+        }
     }
 
     function finalizarERegistrar() {
@@ -551,207 +585,93 @@
         };
 
         if(currentEditingOrcId) {
-            const index = db.historico.findIndex(h => h.id === currentEditingOrcId);
-            if(index !== -1) db.historico[index] = orcData;
+            const idx = db.historico.findIndex(h => h.id === currentEditingOrcId);
+            db.historico[idx] = orcData;
         } else {
             db.historico.push(orcData);
         }
 
-        const cObj = db.clientes.find(c => c.nome === cli);
-        if(cObj) cObj.ultima_compra = new Date().toLocaleString();
-        
-        voltarParaBuscaOrc(); // Reseta tudo e volta para busca
         save();
-        alert("Operação realizada com sucesso!");
-    }
-
-    function editarOrc(id) {
-        const orc = db.historico.find(h => h.id === id);
-        if(orc) {
-            db.orc_temp = [...orc.itens];
-            currentEditingOrcId = orc.id;
-            
-            openTab('tab-orcamento', document.querySelectorAll('.nav-btn')[2]);
-            mostrarAreaOrcamento();
-            
-            // Injeção imediata de valores
-            document.getElementById('orc-cli-sel').value = orc.cliente;
-            document.getElementById('orc-perc-acess').value = orc.perc_acess || 0;
-            document.getElementById('orc-mo-fixo').value = orc.mo_fixo || 0;
-            document.getElementById('orc-perc-mo').value = orc.perc_mo || 0;
-            
-            document.getElementById('btn-finalizar-orc').innerText = "💾 ATUALIZAR ORÇAMENTO";
-            
-            calculateTotal();
-            render();
-        }
-    }
-
-    function confirmarOrc(id) {
-        const idx = db.historico.findIndex(h => h.id === id);
-        if(idx !== -1 && confirm("Confirmar venda? Isso dará baixa no estoque.")) {
-            const orc = db.historico[idx];
-            let erroEstoque = false;
-
-            orc.itens.forEach(item => {
-                const prod = db.estoque.find(p => p.desc === item.desc);
-                if(prod) {
-                    if(prod.qtd >= item.qtd) {
-                        prod.qtd -= item.qtd;
-                        db.movimentacoes.push({
-                            data: new Date().toLocaleString(),
-                            prod: item.desc,
-                            qtd: item.qtd,
-                            dest: orc.cliente
-                        });
-                    } else {
-                        alert(`Estoque insuficiente para: ${item.desc}`);
-                        erroEstoque = true;
-                    }
-                }
-            });
-
-            if(!erroEstoque) {
-                db.historico[idx].status = 'Confirmado';
-                save();
-            }
-        }
-    }
-
-    function delOrc(id) {
-        if(confirm("Excluir este registro do histórico?")) {
-            db.historico = db.historico.filter(h => h.id !== id);
-            save();
-        }
+        alert("Salvo com sucesso!");
+        voltarParaBuscaOrc();
     }
 
     function render(filter = '') {
-        // Render Estoque
+        const tEst = document.getElementById('tbl-estoque-corpo'); tEst.innerHTML='';
         const searchEst = document.getElementById('search-est-input').value.toUpperCase();
-        const tblEst = document.getElementById('tbl-estoque-corpo');
-        tblEst.innerHTML = '';
         db.estoque.forEach((i, idx) => {
             if(filter === 'all' || i.desc.toUpperCase().includes(searchEst)) {
-                tblEst.innerHTML += `<tr>
-                    <td>${i.desc}</td><td>${i.unid}</td><td>${i.ncm}</td><td>${i.cfop}</td>
-                    <td>R$ ${i.val.toFixed(2)}</td>
-                    <td style="color:${i.qtd < 3 ? 'red':'inherit'}; font-weight:bold">${i.qtd}</td>
-                    <td class="no-print">
-                        <button class="btn btn-edit" onclick="editEstItem(${idx})">EDITAR</button>
-                        <button class="btn btn-del" onclick="delEstItem(${idx})">X</button>
-                    </td>
-                </tr>`;
+                tEst.innerHTML += `<tr><td>${i.desc}</td><td>${i.unid}</td><td>${i.ncm}</td><td>${i.cfop}</td><td>R$ ${i.val.toFixed(2)}</td><td>${i.qtd}</td><td class="no-print"><button class="btn btn-edit" onclick="editEstItem(${idx})">E</button><button class="btn btn-del" onclick="delEstItem(${idx})">X</button></td></tr>`;
             }
         });
 
-        // Render Clientes
+        const tCli = document.getElementById('tbl-clientes-corpo'); tCli.innerHTML='';
+        const sCli = document.getElementById('orc-cli-sel'); 
+        const valSel = sCli.value;
         const searchCli = document.getElementById('search-cli-input').value.toUpperCase();
-        const tblCli = document.getElementById('tbl-clientes-corpo');
-        const selCliOrc = document.getElementById('orc-cli-sel');
-        const currentCli = selCliOrc.value;
-        tblCli.innerHTML = '';
-        selCliOrc.innerHTML = '<option value="">Selecionar Cliente</option>';
+        sCli.innerHTML = '<option value="">Selecionar Cliente</option>';
         db.clientes.forEach((c, idx) => {
             if(filter === 'all' || c.nome.toUpperCase().includes(searchCli)) {
-                tblCli.innerHTML += `<tr>
-                    <td><b>${c.nome}</b><br><small>${c.doc}</small></td>
-                    <td>${c.tel}<br><small>${c.email}</small></td>
-                    <td>${c.cidade}/${c.uf}</td>
-                    <td>${c.ultima_compra}</td>
-                    <td class="no-print">
-                        <button class="btn btn-edit" onclick="editCliente(${idx})">EDITAR</button>
-                        <button class="btn btn-del" onclick="delCliente(${idx})">X</button>
-                    </td>
-                </tr>`;
+                tCli.innerHTML += `<tr><td><b>${c.nome}</b><br><small>${c.doc}</small></td><td>${c.tel}</td><td>${c.cidade}/${c.uf}</td><td>${c.ultima_compra}</td><td class="no-print"><button class="btn btn-edit" onclick="editCliente(${idx})">E</button><button class="btn btn-del" onclick="delCliente(${idx})">X</button></td></tr>`;
             }
-            selCliOrc.innerHTML += `<option value="${c.nome}">${c.nome}</option>`;
+            sCli.innerHTML += `<option value="${c.nome}">${c.nome}</option>`;
         });
-        selCliOrc.value = currentCli;
+        sCli.value = valSel;
 
-        // Render Orçamento Atual
-        const tblOrc = document.getElementById('orc-lista-corpo');
-        tblOrc.innerHTML = '';
+        const tOrc = document.getElementById('orc-lista-corpo'); tOrc.innerHTML='';
         db.orc_temp.forEach((o, idx) => {
-            tblOrc.innerHTML += `<tr>
-                <td>${o.qtd}</td><td>${o.desc}</td><td>R$ ${o.val.toFixed(2)}</td><td>R$ ${(o.val * o.qtd).toFixed(2)}</td>
-                <td class="no-print"><button class="btn btn-del" onclick="delItemOrc(${idx})">REMOVER</button></td>
-            </tr>`;
+            tOrc.innerHTML += `<tr><td>${o.qtd}</td><td>${o.desc}</td><td>R$ ${o.val.toFixed(2)}</td><td>R$ ${(o.val*o.qtd).toFixed(2)}</td><td class="no-print"><button class="btn btn-del" onclick="delItemOrc(${idx})">X</button></td></tr>`;
         });
-        
-        // Render Histórico
+
+        const tHist = document.getElementById('tbl-historico-corpo'); tHist.innerHTML='';
         const searchHist = document.getElementById('search-hist').value.toUpperCase();
-        const tblHist = document.getElementById('tbl-historico-corpo');
-        tblHist.innerHTML = '';
-        db.historico.forEach(h => {
+        [...db.historico].reverse().forEach(h => {
             if(h.cliente.toUpperCase().includes(searchHist)) {
-                const statusColor = h.status === 'Pendente' ? 'orange' : 'green';
-                tblHist.innerHTML += `<tr>
-                    <td>${h.data}</td><td>${h.cliente}</td><td>R$ ${h.total.toFixed(2)}</td>
-                    <td style="color:${statusColor}; font-weight:bold">${h.status}</td>
-                    <td class="no-print">
-                        <button class="btn btn-edit" onclick="editarOrc(${h.id})">EDITAR/VER</button>
-                        ${h.status === 'Pendente' ? `<button class="btn btn-add" style="background:green" onclick="confirmarOrc(${h.id})">CONFIRMAR</button>` : ''}
-                        <button class="btn btn-del" onclick="delOrc(${h.id})">X</button>
-                    </td>
-                </tr>`;
+                tHist.innerHTML += `<tr><td>${h.data}</td><td>${h.cliente}</td><td>R$ ${h.total.toFixed(2)}</td><td>${h.status}</td><td class="no-print"><button class="btn btn-edit" onclick="editarOrc(${h.id})">VER</button></td></tr>`;
             }
         });
 
-        // Render Logs
-        const tblLog = document.getElementById('tbl-log-corpo');
-        tblLog.innerHTML = '';
+        const tLog = document.getElementById('tbl-log-corpo'); tLog.innerHTML='';
         [...db.movimentacoes].reverse().forEach(m => {
-            tblLog.innerHTML += `<tr><td>${m.data}</td><td>${m.prod}</td><td>${m.qtd}</td><td>${m.dest}</td></tr>`;
+            tLog.innerHTML += `<tr><td>${m.data}</td><td>${m.prod}</td><td>${m.qtd}</td><td>${m.destino}</td></tr>`;
         });
     }
 
     async function refreshTemperature() {
-        const el = document.getElementById('temp-val');
-        el.innerText = "Lendo...";
         try {
-            const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=-16.68&longitude=-49.25&current_weather=true');
-            const data = await res.json();
-            el.innerText = data.current_weather.temperature + "°C";
-        } catch { el.innerText = "Erro"; }
+            const response = await fetch('https://api.open-meteo.com/v1/forecast?latitude=-16.68&longitude=-49.25&current_weather=true');
+            const data = await response.json();
+            document.getElementById('temp-val').innerText = data.current_weather.temperature + "°C";
+        } catch(e) { document.getElementById('temp-val').innerText = "Erro"; }
     }
 
     function exportDB() {
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db));
-        const dlAnchorElem = document.createElement('a');
-        dlAnchorElem.setAttribute("href", dataStr);
-        dlAnchorElem.setAttribute("download", `asb_backup_${new Date().toLocaleDateString()}.json`);
-        dlAnchorElem.click();
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", "asb_backup_" + Date.now() + ".json");
+        document.body.appendChild(downloadAnchorNode);
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
     }
 
     function importDB(input) {
-        const file = input.files[0];
         const reader = new FileReader();
-        reader.onload = function(e) {
+        reader.onload = function(){
             try {
-                const imported = JSON.parse(e.target.result);
-                if(confirm("Isso substituirá todos os dados da nuvem. Continuar?")) {
+                const imported = JSON.parse(reader.result);
+                if(confirm("Deseja substituir os dados da nuvem por este arquivo?")) {
                     db = imported;
                     save();
-                    alert("Importação concluída!");
+                    alert("Importado com sucesso!");
                 }
-            } catch { alert("Arquivo JSON inválido."); }
+            } catch(e) { alert("Erro no arquivo!"); }
         };
-        reader.readAsText(file);
+        reader.readAsText(input.files[0]);
     }
 
-    function limparHistoricoGeral() {
-        if(confirm("ATENÇÃO: Isso apagará todo o histórico e logs de movimentação permanentemente. Confirmar?")) {
-            db.historico = [];
-            db.movimentacoes = [];
-            save();
-        }
-    }
-
-    function forceRealtimeSync() {
-        initCloud();
-        alert("Sincronização reiniciada com o Firebase.");
-    }
+    function forceRealtimeSync() { initCloud(); alert("Canal reiniciado!"); }
+    function limparHistoricoGeral() { if(confirm("Apagar histórico e logs?")) { db.historico = []; db.movimentacoes = []; save(); } }
 </script>
-
 </body>
 </html>
