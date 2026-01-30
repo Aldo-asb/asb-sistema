@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#1a1a1a">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Gestão ASB ENG - v81.0</title>
+    <title>Gestão ASB ENG - v82.0</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
@@ -147,7 +147,7 @@
                 <div class="field-group edit-only"><label>Aumento (%)</label><input type="number" id="est-markup" class="edit-highlight" oninput="calcularPrecoVenda()"></div>
                 <div class="field-group"><label>Preço Venda (R$)</label><input type="number" id="est-val"></div>
                 <div class="field-group"><label>Qtd em Estoque</label><input type="number" id="est-qtd"></div>
-                <div class="form-actions-column">
+                <div class="form-actions-column" style="display:flex; gap:10px;">
                     <button class="btn btn-add" id="btn-save-est" onclick="addEstoque()">SALVAR</button>
                     <button class="btn btn-new" onclick="cancelarEdicao()">CANCELAR</button>
                 </div>
@@ -176,7 +176,7 @@
                 <div class="field-group"><label>Endereço</label><input type="text" id="cli-end"></div>
                 <div class="field-group"><label>Cidade</label><input type="text" id="cli-cidade"></div>
                 <div class="field-group"><label>Estado</label><select id="cli-uf"><option>GO</option><option>DF</option><option>SP</option><option>MG</option><option>RJ</option><option>PR</option></select></div>
-                <div class="form-actions-column">
+                <div class="form-actions-column" style="display:flex; gap:10px;">
                     <button class="btn btn-add" id="btn-save-cli" onclick="addCliente()">SALVAR</button>
                     <button class="btn btn-new" onclick="cancelarEdicaoCliente()">CANCELAR</button>
                 </div>
@@ -265,7 +265,7 @@
 </div>
 
 <script>
-    // CONFIGURAÇÃO FIREBASE - v81.0
+    // CONFIGURAÇÃO FIREBASE - v82.0
     const firebaseConfig = {
         apiKey: "AIzaSyA8rHSh4HW_bSVzccYPb49aQJ5QlvakAKo",
         authDomain: "asb-sistema.firebaseapp.com",
@@ -278,11 +278,9 @@
 
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
-    
-    // NÓ DE DADOS REALTIME
     const DB_PATH = 'asb_cloud_master_v81';
-    let db = { users:[{user:'admin', pass:'asb123', level:'master'}], estoque:[], clientes:[], orc_temp:[], historico:[], movimentacoes:[] };
     
+    let db = { users:[{user:'admin', pass:'asb123', level:'master'}], estoque:[], clientes:[], orc_temp:[], historico:[], movimentacoes:[] };
     let editingEstoqueIndex = null;
     let editingClienteIndex = null;
 
@@ -290,14 +288,23 @@
         database.ref(DB_PATH).on('value', (snapshot) => {
             const val = snapshot.val();
             if(val) {
-                db = val;
-                if(!db.users) db.users = [{user:'admin', pass:'asb123', level:'master'}];
+                db = {
+                    users: val.users || [{user:'admin', pass:'asb123', level:'master'}],
+                    estoque: val.estoque || [],
+                    clientes: val.clientes || [],
+                    orc_temp: val.orc_temp || [],
+                    historico: val.historico || [],
+                    movimentacoes: val.movimentacoes || []
+                };
                 document.getElementById('sync-indicator').innerText = "Nuvem Ativa";
                 document.getElementById('sync-indicator').className = 'sync-badge sync-online';
                 render();
             } else {
                 save();
             }
+        }, (error) => {
+            document.getElementById('sync-indicator').innerText = "Erro Cloud";
+            document.getElementById('sync-indicator').className = 'sync-badge sync-offline';
         });
     }
 
@@ -332,6 +339,7 @@
     }
 
     function mostrarFormEstoque() { document.getElementById('form-estoque').style.display = 'grid'; }
+    
     function addEstoque() {
         const item = {
             desc: document.getElementById('est-desc').value.trim(),
@@ -346,8 +354,7 @@
             val: parseFloat(document.getElementById('est-val').value) || 0,
             qtd: parseInt(document.getElementById('est-qtd').value) || 0
         };
-        if(!item.desc) return;
-        if(!db.estoque) db.estoque = [];
+        if(!item.desc) return alert("Descrição obrigatória!");
         if(editingEstoqueIndex !== null) db.estoque[editingEstoqueIndex] = item;
         else db.estoque.push(item);
         cancelarEdicao(); save();
@@ -372,6 +379,10 @@
         document.getElementById('btn-save-est').innerText = "ATUALIZAR";
     }
 
+    function delEstItem(idx) {
+        if(confirm("Excluir produto?")) { db.estoque.splice(idx, 1); save(); }
+    }
+
     function cancelarEdicao() {
         editingEstoqueIndex = null;
         document.getElementById('form-estoque').style.display = 'none';
@@ -387,6 +398,7 @@
     }
 
     function mostrarFormCliente() { document.getElementById('form-cliente').style.display = 'grid'; }
+    
     function addCliente() {
         const c = {
             nome: document.getElementById('cli-nome').value.trim(),
@@ -400,8 +412,7 @@
             uf: document.getElementById('cli-uf').value,
             ultima_compra: editingClienteIndex !== null ? db.clientes[editingClienteIndex].ultima_compra : '---'
         };
-        if(!c.nome) return;
-        if(!db.clientes) db.clientes = [];
+        if(!c.nome) return alert("Nome Fantasia obrigatório!");
         if(editingClienteIndex !== null) db.clientes[editingClienteIndex] = c;
         else db.clientes.push(c);
         cancelarEdicaoCliente(); save();
@@ -423,21 +434,24 @@
         document.getElementById('btn-save-cli').innerText = "ATUALIZAR";
     }
 
+    function delCliente(idx) {
+        if(confirm("Excluir cliente?")) { db.clientes.splice(idx, 1); save(); }
+    }
+
     function cancelarEdicaoCliente() {
         editingClienteIndex = null;
         document.getElementById('form-cliente').style.display = 'none';
         ['cli-nome','cli-razao','cli-doc','cli-tel','cli-email','cli-end','cli-cidade'].forEach(id => document.getElementById(id).value = '');
+        document.getElementById('btn-save-cli').innerText = "SALVAR";
     }
 
     function filterItems() {
         const term = document.getElementById('orc-search').value.toUpperCase();
         const sel = document.getElementById('orc-item-sel');
         sel.innerHTML = '<option value="">Pesquise...</option>';
-        if(db.estoque) {
-            db.estoque.filter(i => i.desc.toUpperCase().includes(term)).forEach(i => {
-                sel.innerHTML += `<option value="${i.desc}">${i.desc} (R$ ${i.val.toFixed(2)})</option>`;
-            });
-        }
+        db.estoque.filter(i => i.desc.toUpperCase().includes(term)).forEach(i => {
+            sel.innerHTML += `<option value="${i.desc}">${i.desc} (R$ ${i.val.toFixed(2)})</option>`;
+        });
     }
 
     function addItemOrc() {
@@ -445,10 +459,13 @@
         const qtd = parseInt(document.getElementById('orc-qtd-sel').value) || 1;
         const prod = db.estoque.find(p => p.desc === valSel);
         if(prod) { 
-            if(!db.orc_temp) db.orc_temp = [];
             db.orc_temp.push({id: Date.now(), desc: prod.desc, val: prod.val, qtd: qtd}); 
             save(); 
         }
+    }
+
+    function delItemOrc(idx) {
+        db.orc_temp.splice(idx, 1); save();
     }
 
     function novoOrcamento() {
@@ -462,7 +479,7 @@
 
     function calculateTotal() {
         let mat = 0;
-        if(db.orc_temp) db.orc_temp.forEach(o => mat += (o.val * o.qtd));
+        db.orc_temp.forEach(o => mat += (o.val * o.qtd));
         const acess = mat * ((parseFloat(document.getElementById('orc-perc-acess').value) || 0)/100);
         const mo = (parseFloat(document.getElementById('orc-mo-fixo').value) || 0) + (mat * ((parseFloat(document.getElementById('orc-perc-mo').value) || 0)/100));
         const total = mat + acess + mo;
@@ -477,8 +494,7 @@
 
     function finalizarERegistrar() {
         const cli = document.getElementById('orc-cli-sel').value;
-        if(!cli || !db.orc_temp || db.orc_temp.length === 0) return alert("Selecione cliente e adicione itens!");
-        if(!db.historico) db.historico = [];
+        if(!cli || db.orc_temp.length === 0) return alert("Selecione cliente e adicione itens!");
         db.historico.push({ id: Date.now(), data: new Date().toLocaleString(), cliente: cli, total: calculateTotal(), status: 'Pendente', itens: [...db.orc_temp] });
         const cObj = db.clientes.find(c => c.nome === cli);
         if(cObj) cObj.ultima_compra = new Date().toLocaleString();
@@ -494,7 +510,6 @@
                         const p = db.estoque.find(e => e.desc === it.desc);
                         if(p) { 
                             p.qtd -= it.qtd; 
-                            if(!db.movimentacoes) db.movimentacoes = [];
                             db.movimentacoes.push({data: new Date().toLocaleString(), produto: it.desc, qtd: it.qtd, destino: h.cliente}); 
                         }
                     });
@@ -509,12 +524,16 @@
         const u = document.getElementById('new-user').value.trim();
         const p = document.getElementById('new-pass').value.trim();
         if(u && p) {
-            if(!db.users) db.users = [];
             db.users.push({user: u, pass: p, level: 'comum'});
             document.getElementById('new-user').value = '';
             document.getElementById('new-pass').value = '';
             save();
         }
+    }
+
+    function delUser(idx) {
+        if(db.users[idx].user === 'admin') return alert("Admin não pode ser removido.");
+        if(confirm("Remover usuário?")) { db.users.splice(idx, 1); save(); }
     }
 
     function refreshTemperature() {
@@ -526,7 +545,7 @@
         const blob = new Blob([JSON.stringify(db)], {type: 'application/json'});
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a'); a.href = url;
-        a.download = `ASB_BACKUP_v81.json`;
+        a.download = `ASB_BACKUP_v82.json`;
         a.click();
     }
 
@@ -535,7 +554,7 @@
         reader.onload = function() {
             try {
                 const imported = JSON.parse(reader.result);
-                if(confirm("Substituir dados atuais?")) {
+                if(confirm("Substituir dados atuais na nuvem?")) {
                     db = imported; save(); alert("Importação completa!");
                 }
             } catch(e) { alert("JSON Inválido."); }
@@ -555,67 +574,90 @@
     }
 
     function render(filter) {
-        if(!db) return;
-        const estTbody = document.getElementById('tbl-estoque-corpo');
-        if(estTbody) {
-            estTbody.innerHTML = '';
-            const s = document.getElementById('search-est-input').value.toUpperCase();
-            if(db.estoque) db.estoque.forEach((item, idx) => {
-                if(filter === 'all' || item.desc.toUpperCase().includes(s)) {
-                    estTbody.innerHTML += `<tr><td>${item.desc}</td><td>${item.unid}</td><td>${item.ncm}</td><td>${item.cfop}</td><td>R$ ${parseFloat(item.val).toFixed(2)}</td><td>${item.qtd}</td><td class="no-print"><button class="btn btn-edit" onclick="editEstItem(${idx})">EDIT</button><button class="btn btn-del" onclick="if(confirm('Excluir?')){db.estoque.splice(${idx},1);save();}">DEL</button></td></tr>`;
-                }
-            });
-        }
-        const cliTbody = document.getElementById('tbl-clientes-corpo');
-        if(cliTbody) {
-            cliTbody.innerHTML = '';
-            const s = document.getElementById('search-cli-input').value.toUpperCase();
-            if(db.clientes) db.clientes.forEach((c, idx) => {
-                if(filter === 'all' || c.nome.toUpperCase().includes(s)) {
-                    cliTbody.innerHTML += `<tr><td><strong>${c.nome}</strong><br><small>${c.doc}</small></td><td>${c.tel}</td><td>${c.cidade}/${c.uf}</td><td>${c.ultima_compra || '---'}</td><td class="no-print"><button class="btn btn-edit" onclick="editCliente(${idx})">EDIT</button></td></tr>`;
-                }
-            });
-        }
-        const orcCliSel = document.getElementById('orc-cli-sel');
-        if(orcCliSel && db.clientes) {
-            const current = orcCliSel.value;
-            orcCliSel.innerHTML = '<option value="">Selecionar Cliente</option>';
-            db.clientes.forEach(c => {
-                orcCliSel.innerHTML += `<option value="${c.nome}" ${current === c.nome ? 'selected' : ''}>${c.nome}</option>`;
-            });
-        }
-        const orcTbody = document.getElementById('orc-lista-corpo');
-        if(orcTbody) {
-            orcTbody.innerHTML = '';
-            if(db.orc_temp) db.orc_temp.forEach((it, idx) => {
-                orcTbody.innerHTML += `<tr><td>${it.qtd}</td><td>${it.desc}</td><td>R$ ${parseFloat(it.val).toFixed(2)}</td><td>R$ ${(it.val * it.qtd).toFixed(2)}</td><td class="no-print"><button class="btn btn-del" onclick="db.orc_temp.splice(${idx},1);save();">X</button></td></tr>`;
-            });
-            calculateTotal();
-        }
-        const histTbody = document.getElementById('tbl-historico-corpo');
-        if(histTbody) {
-            histTbody.innerHTML = '';
-            const s = document.getElementById('search-hist').value.toUpperCase();
-            if(db.historico) db.historico.slice().reverse().forEach((h) => {
-                if(h.cliente.toUpperCase().includes(s)) {
-                    histTbody.innerHTML += `<tr><td>${h.data}</td><td>${h.cliente}</td><td>R$ ${parseFloat(h.total).toFixed(2)}</td><td><select onchange="updateStatus(${h.id}, this.value)" style="width:auto; padding:5px;"><option ${h.status==='Pendente'?'selected':''}>Pendente</option><option ${h.status==='Aprovado'?'selected':''}>Aprovado</option><option ${h.status==='Cancelado'?'selected':''}>Cancelado</option></select></td><td><button class="btn btn-new" onclick="alert('Relatório Detalhado em Breve')">VER</button></td></tr>`;
-                }
-            });
-        }
-        const logTbody = document.getElementById('tbl-log-corpo');
-        if(logTbody) {
-            logTbody.innerHTML = '';
-            if(db.movimentacoes) db.movimentacoes.slice().reverse().forEach(m => {
-                logTbody.innerHTML += `<tr><td>${m.data}</td><td>${m.produto}</td><td>${m.qtd}</td><td>${m.destino}</td></tr>`;
-            });
-        }
-        const userTbody = document.getElementById('tbl-users-corpo');
-        if(userTbody) {
-            userTbody.innerHTML = '';
-            if(db.users) db.users.forEach((u, idx) => {
-                userTbody.innerHTML += `<tr><td>${u.user}</td><td>${u.level}</td><td><button class="btn btn-del" onclick="if(confirm('Excluir?')){db.users.splice(${idx},1);save();}">DEL</button></td></tr>`;
-            });
-        }
+        // Render Estoque
+        const sEst = document.getElementById('search-est-input').value.toUpperCase();
+        let hEst = "";
+        db.estoque.forEach((i, idx) => {
+            if(filter === 'all' || i.desc.toUpperCase().includes(sEst)) {
+                hEst += `<tr>
+                    <td>${i.desc}</td><td>${i.unid}</td><td>${i.ncm}</td><td>${i.cfop}</td>
+                    <td>R$ ${i.val.toFixed(2)}</td><td>${i.qtd}</td>
+                    <td class="no-print">
+                        <button class="btn btn-edit" onclick="editEstItem(${idx})">✎</button>
+                        <button class="btn btn-del" onclick="delEstItem(${idx})">✕</button>
+                    </td></tr>`;
+            }
+        });
+        document.getElementById('tbl-estoque-corpo').innerHTML = hEst;
+
+        // Render Clientes
+        const sCli = document.getElementById('search-cli-input').value.toUpperCase();
+        let hCli = "";
+        db.clientes.forEach((c, idx) => {
+            if(filter === 'all' || c.nome.toUpperCase().includes(sCli)) {
+                hCli += `<tr>
+                    <td><strong>${c.nome}</strong><br><small>${c.doc}</small></td>
+                    <td>${c.tel}<br><small>${c.email}</small></td>
+                    <td>${c.cidade}/${c.uf}</td>
+                    <td>${c.ultima_compra}</td>
+                    <td class="no-print">
+                        <button class="btn btn-edit" onclick="editCliente(${idx})">✎</button>
+                        <button class="btn btn-del" onclick="delCliente(${idx})">✕</button>
+                    </td></tr>`;
+            }
+        });
+        document.getElementById('tbl-clientes-corpo').innerHTML = hCli;
+
+        // Render Orçamento Selects
+        const cliSel = document.getElementById('orc-cli-sel');
+        const currentCli = cliSel.value;
+        cliSel.innerHTML = '<option value="">Selecionar Cliente</option>';
+        db.clientes.forEach(c => {
+            cliSel.innerHTML += `<option value="${c.nome}" ${c.nome === currentCli ? 'selected' : ''}>${c.nome}</option>`;
+        });
+
+        // Render Orçamento Itens
+        let hOrc = "";
+        db.orc_temp.forEach((o, idx) => {
+            hOrc += `<tr>
+                <td>${o.qtd}</td><td>${o.desc}</td><td>R$ ${o.val.toFixed(2)}</td>
+                <td>R$ ${(o.val * o.qtd).toFixed(2)}</td>
+                <td class="no-print"><button class="btn btn-del" onclick="delItemOrc(${idx})">✕</button></td></tr>`;
+        });
+        document.getElementById('orc-lista-corpo').innerHTML = hOrc;
+        calculateTotal();
+
+        // Render Histórico
+        const sHist = document.getElementById('search-hist').value.toUpperCase();
+        let hHist = "";
+        [...db.historico].reverse().forEach(h => {
+            if(h.cliente.toUpperCase().includes(sHist)) {
+                hHist += `<tr>
+                    <td>${h.data}</td><td>${h.cliente}</td><td>R$ ${h.total.toFixed(2)}</td>
+                    <td><select onchange="updateStatus(${h.id}, this.value)" ${h.status === 'Aprovado' ? 'disabled' : ''}>
+                        <option ${h.status === 'Pendente' ? 'selected' : ''}>Pendente</option>
+                        <option ${h.status === 'Aprovado' ? 'selected' : ''}>Aprovado</option>
+                        <option ${h.status === 'Cancelado' ? 'selected' : ''}>Cancelado</option>
+                    </select></td>
+                    <td><button class="btn btn-edit" onclick="alert('Funcionalidade de Visualização Detalhada em breve')">👁️</button></td></tr>`;
+            }
+        });
+        document.getElementById('tbl-historico-corpo').innerHTML = hHist;
+
+        // Render Movimentação
+        let hLog = "";
+        [...db.movimentacoes].reverse().forEach(m => {
+            hLog += `<tr><td>${m.data}</td><td>${m.produto}</td><td>${m.qtd}</td><td>${m.destino}</td></tr>`;
+        });
+        document.getElementById('tbl-log-corpo').innerHTML = hLog;
+
+        // Render Usuários
+        let hUsr = "";
+        db.users.forEach((u, idx) => {
+            hUsr += `<tr><td>${u.user}</td><td>${u.level}</td>
+                <td><button class="btn btn-del" onclick="delUser(${idx})">✕</button></td></tr>`;
+        });
+        document.getElementById('tbl-users-corpo').innerHTML = hUsr;
     }
 </script>
 </body>
