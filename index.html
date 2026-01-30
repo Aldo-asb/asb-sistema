@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#1a1a1a">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Gestão ASB ENG - v87.0</title>
+    <title>Gestão ASB ENG - v88.0</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
@@ -265,7 +265,7 @@
 </div>
 
 <script>
-    // CONFIGURAÇÃO FIREBASE - v87.0
+    // CONFIGURAÇÃO FIREBASE - v88.0
     const firebaseConfig = {
         apiKey: "AIzaSyA8rHSh4HW_bSVzccYPb49aQJ5QlvakAKo",
         authDomain: "asb-sistema.firebaseapp.com",
@@ -542,31 +542,36 @@
         const cObj = db.clientes.find(c => c.nome === cli);
         if(cObj) cObj.ultima_compra = new Date().toLocaleString();
         
-        // Limpa tudo após salvar
+        // Limpa tudo após salvar e volta ao estado de busca inicial
         resetFormOrcamento();
         save();
-        alert("Orçamento salvo no Histórico!");
+        alert("Orçamento salvo com sucesso!");
         openTab('tab-relatorios', document.querySelectorAll('.nav-btn')[3]);
     }
 
     function editarOrc(id) {
         const orc = db.historico.find(h => h.id === id);
         if(orc) {
-            // Primeiro limpa o estado atual
+            // Garante que a lista temporária receba os itens do histórico
             db.orc_temp = [...orc.itens];
             currentEditingOrcId = orc.id;
             
-            // Vai para a aba
+            // Vai para a aba de orçamento
             openTab('tab-orcamento', document.querySelectorAll('.nav-btn')[2]);
             
-            // Alimenta os inputs explicitamente
+            // CARREGAMENTO EXPLÍCITO DE VALORES NO DOM
             document.getElementById('orc-cli-sel').value = orc.cliente;
             document.getElementById('orc-perc-acess').value = orc.perc_acess || 0;
             document.getElementById('orc-mo-fixo').value = orc.mo_fixo || 0;
             document.getElementById('orc-perc-mo').value = orc.perc_mo || 0;
             
+            // Limpa campos de busca para evitar confusão
+            document.getElementById('orc-search').value = "";
+            document.getElementById('orc-item-sel').innerHTML = '<option value="">Pesquise...</option>';
+            
             document.getElementById('btn-finalizar-orc').innerText = "💾 ATUALIZAR ORÇAMENTO";
             
+            // Recalcula para garantir que os valores de acessórios e MO apareçam nos totais
             calculateTotal();
             render();
             save();
