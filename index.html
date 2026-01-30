@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#1a1a1a">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Gestão ASB ENG - v82.0</title>
+    <title>Gestão ASB ENG - v84.0</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
@@ -224,7 +224,7 @@
         <section id="tab-relatorios" class="section-panel">
             <div class="search-hero"><input type="text" id="search-hist" placeholder="🔍 Filtrar histórico por cliente..." onkeyup="render()"></div>
             <table>
-                <thead><tr><th>Data</th><th>Cliente</th><th>Valor</th><th>Status</th><th>Ações</th></tr></thead>
+                <thead><tr><th>Data</th><th>Cliente</th><th>Valor</th><th>Status</th><th class="no-print">Ações</th></tr></thead>
                 <tbody id="tbl-historico-corpo"></tbody>
             </table>
         </section>
@@ -265,7 +265,7 @@
 </div>
 
 <script>
-    // CONFIGURAÇÃO FIREBASE - v82.0
+    // CONFIGURAÇÃO FIREBASE - v84.0
     const firebaseConfig = {
         apiKey: "AIzaSyA8rHSh4HW_bSVzccYPb49aQJ5QlvakAKo",
         authDomain: "asb-sistema.firebaseapp.com",
@@ -438,6 +438,23 @@
         if(confirm("Excluir cliente?")) { db.clientes.splice(idx, 1); save(); }
     }
 
+    function imprimirClienteIndividual(idx) {
+        const c = db.clientes[idx];
+        const win = window.open('', '', 'height=600,width=800');
+        win.document.write('<html><head><title>Ficha do Cliente</title><style>body{font-family:sans-serif;padding:20px;} h2{border-bottom:2px solid #000;}</style></head><body>');
+        win.document.write('<h2>FICHA DO CLIENTE - ASB AUTOMAÇÃO</h2>');
+        win.document.write('<p><b>Nome Fantasia:</b> ' + c.nome + '</p>');
+        win.document.write('<p><b>Razão Social:</b> ' + c.razao + '</p>');
+        win.document.write('<p><b>CPF/CNPJ:</b> ' + c.doc + '</p>');
+        win.document.write('<p><b>WhatsApp:</b> ' + c.tel + '</p>');
+        win.document.write('<p><b>E-mail:</b> ' + c.email + '</p>');
+        win.document.write('<p><b>Endereço:</b> ' + c.end + ', ' + c.cidade + ' - ' + c.uf + '</p>');
+        win.document.write('<p><b>Última Compra:</b> ' + c.ultima_compra + '</p>');
+        win.document.write('</body></html>');
+        win.document.close();
+        win.print();
+    }
+
     function cancelarEdicaoCliente() {
         editingClienteIndex = null;
         document.getElementById('form-cliente').style.display = 'none';
@@ -501,6 +518,27 @@
         db.orc_temp = []; save(); alert("Orçamento registrado!");
     }
 
+    function delHistItem(id) {
+        const h = db.historico.find(x => x.id === id);
+        if(h && h.status === 'Aprovado') return alert("Orçamentos aprovados não podem ser excluídos por segurança.");
+        if(confirm("Excluir este registro do histórico?")) {
+            db.historico = db.historico.filter(h => h.id !== id);
+            save();
+        }
+    }
+
+    function editarHistOrc(id) {
+        const h = db.historico.find(x => x.id === id);
+        if(h) {
+            if(confirm("Carregar este orçamento para edição? Isso limpará o orçamento atual.")) {
+                db.orc_temp = [...h.itens];
+                save();
+                openTab('tab-orcamento', document.querySelector('button[onclick*="tab-orcamento"]'));
+                setTimeout(() => { document.getElementById('orc-cli-sel').value = h.cliente; }, 100);
+            }
+        }
+    }
+
     function updateStatus(id, newStatus) {
         const h = db.historico.find(x => x.id === id);
         if(h && h.status !== newStatus) {
@@ -544,120 +582,71 @@
     function exportDB() {
         const blob = new Blob([JSON.stringify(db)], {type: 'application/json'});
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url;
-        a.download = `ASB_BACKUP_v82.json`;
+        const a = document.createElement('a'); 
+        a.href = url; 
+        a.download = 'backup_asb.json'; 
         a.click();
     }
 
     function importDB(input) {
         const reader = new FileReader();
-        reader.onload = function() {
+        reader.onload = function(){
             try {
                 const imported = JSON.parse(reader.result);
-                if(confirm("Substituir dados atuais na nuvem?")) {
-                    db = imported; save(); alert("Importação completa!");
+                if(confirm("Substituir dados da nuvem pelo arquivo?")) {
+                    db = imported; save(); alert("Dados importados!");
                 }
-            } catch(e) { alert("JSON Inválido."); }
+            } catch(e) { alert("Arquivo inválido!"); }
         };
         reader.readAsText(input.files[0]);
     }
 
     function limparHistoricoGeral() {
-        if(confirm("Deseja apagar histórico e logs?")) {
+        if(confirm("Isso apagará TODO o histórico e logs de movimentação. Continuar?")) {
             db.historico = []; db.movimentacoes = []; save();
         }
     }
 
-    function forceRealtimeSync() {
-        initCloud();
-        alert("Canal Cloud Reiniciado.");
-    }
+    function forceRealtimeSync() { initCloud(); alert("Sincronização reiniciada!"); }
 
-    function render(filter) {
-        // Render Estoque
+    function render(mode = 'search') {
         const sEst = document.getElementById('search-est-input').value.toUpperCase();
-        let hEst = "";
-        db.estoque.forEach((i, idx) => {
-            if(filter === 'all' || i.desc.toUpperCase().includes(sEst)) {
-                hEst += `<tr>
-                    <td>${i.desc}</td><td>${i.unid}</td><td>${i.ncm}</td><td>${i.cfop}</td>
-                    <td>R$ ${i.val.toFixed(2)}</td><td>${i.qtd}</td>
-                    <td class="no-print">
-                        <button class="btn btn-edit" onclick="editEstItem(${idx})">✎</button>
-                        <button class="btn btn-del" onclick="delEstItem(${idx})">✕</button>
-                    </td></tr>`;
-            }
-        });
-        document.getElementById('tbl-estoque-corpo').innerHTML = hEst;
+        document.getElementById('tbl-estoque-corpo').innerHTML = db.estoque
+            .filter(i => mode === 'all' || i.desc.toUpperCase().includes(sEst))
+            .map((i, idx) => `<tr><td>${i.desc}</td><td>${i.unid}</td><td>${i.ncm}</td><td>${i.cfop}</td><td>R$ ${i.val.toFixed(2)}</td><td>${i.qtd}</td><td class="no-print">
+                <button class="btn btn-edit" onclick="editEstItem(${idx})">✎</button>
+                <button class="btn btn-del" onclick="delEstItem(${idx})">✕</button></td></tr>`).join('');
 
-        // Render Clientes
         const sCli = document.getElementById('search-cli-input').value.toUpperCase();
-        let hCli = "";
-        db.clientes.forEach((c, idx) => {
-            if(filter === 'all' || c.nome.toUpperCase().includes(sCli)) {
-                hCli += `<tr>
-                    <td><strong>${c.nome}</strong><br><small>${c.doc}</small></td>
-                    <td>${c.tel}<br><small>${c.email}</small></td>
-                    <td>${c.cidade}/${c.uf}</td>
-                    <td>${c.ultima_compra}</td>
-                    <td class="no-print">
-                        <button class="btn btn-edit" onclick="editCliente(${idx})">✎</button>
-                        <button class="btn btn-del" onclick="delCliente(${idx})">✕</button>
-                    </td></tr>`;
-            }
-        });
-        document.getElementById('tbl-clientes-corpo').innerHTML = hCli;
+        document.getElementById('tbl-clientes-corpo').innerHTML = db.clientes
+            .filter(c => mode === 'all' || c.nome.toUpperCase().includes(sCli))
+            .map((c, idx) => `<tr><td><b>${c.nome}</b><br><small>${c.doc}</small></td><td>${c.tel}</td><td>${c.cidade}/${c.uf}</td><td>${c.ultima_compra}</td><td class="no-print">
+                <button class="btn btn-edit" style="background:var(--asb-blue); color:white;" onclick="imprimirClienteIndividual(${idx})">🖨️</button>
+                <button class="btn btn-edit" onclick="editCliente(${idx})">✎</button>
+                <button class="btn btn-del" onclick="delCliente(${idx})">✕</button></td></tr>`).join('');
 
-        // Render Orçamento Selects
-        const cliSel = document.getElementById('orc-cli-sel');
-        const currentCli = cliSel.value;
-        cliSel.innerHTML = '<option value="">Selecionar Cliente</option>';
-        db.clientes.forEach(c => {
-            cliSel.innerHTML += `<option value="${c.nome}" ${c.nome === currentCli ? 'selected' : ''}>${c.nome}</option>`;
-        });
-
-        // Render Orçamento Itens
-        let hOrc = "";
-        db.orc_temp.forEach((o, idx) => {
-            hOrc += `<tr>
-                <td>${o.qtd}</td><td>${o.desc}</td><td>R$ ${o.val.toFixed(2)}</td>
-                <td>R$ ${(o.val * o.qtd).toFixed(2)}</td>
-                <td class="no-print"><button class="btn btn-del" onclick="delItemOrc(${idx})">✕</button></td></tr>`;
-        });
-        document.getElementById('orc-lista-corpo').innerHTML = hOrc;
-        calculateTotal();
-
-        // Render Histórico
         const sHist = document.getElementById('search-hist').value.toUpperCase();
-        let hHist = "";
-        [...db.historico].reverse().forEach(h => {
-            if(h.cliente.toUpperCase().includes(sHist)) {
-                hHist += `<tr>
-                    <td>${h.data}</td><td>${h.cliente}</td><td>R$ ${h.total.toFixed(2)}</td>
-                    <td><select onchange="updateStatus(${h.id}, this.value)" ${h.status === 'Aprovado' ? 'disabled' : ''}>
-                        <option ${h.status === 'Pendente' ? 'selected' : ''}>Pendente</option>
-                        <option ${h.status === 'Aprovado' ? 'selected' : ''}>Aprovado</option>
-                        <option ${h.status === 'Cancelado' ? 'selected' : ''}>Cancelado</option>
-                    </select></td>
-                    <td><button class="btn btn-edit" onclick="alert('Funcionalidade de Visualização Detalhada em breve')">👁️</button></td></tr>`;
-            }
-        });
-        document.getElementById('tbl-historico-corpo').innerHTML = hHist;
+        document.getElementById('tbl-historico-corpo').innerHTML = [...db.historico].reverse()
+            .filter(h => h.cliente.toUpperCase().includes(sHist))
+            .map(h => `<tr><td>${h.data}</td><td>${h.cliente}</td><td>R$ ${h.total.toFixed(2)}</td>
+                <td><select onchange="updateStatus(${h.id}, this.value)">
+                    <option ${h.status==='Pendente'?'selected':''}>Pendente</option>
+                    <option ${h.status==='Aprovado'?'selected':''}>Aprovado</option>
+                    <option ${h.status==='Cancelado'?'selected':''}>Cancelado</option>
+                </select></td><td class="no-print">
+                    <button class="btn btn-edit" onclick="editarHistOrc(${h.id})">✎</button>
+                    <button class="btn btn-del" onclick="delHistItem(${h.id})">✕</button>
+                </td></tr>`).join('');
 
-        // Render Movimentação
-        let hLog = "";
-        [...db.movimentacoes].reverse().forEach(m => {
-            hLog += `<tr><td>${m.data}</td><td>${m.produto}</td><td>${m.qtd}</td><td>${m.destino}</td></tr>`;
-        });
-        document.getElementById('tbl-log-corpo').innerHTML = hLog;
-
-        // Render Usuários
-        let hUsr = "";
-        db.users.forEach((u, idx) => {
-            hUsr += `<tr><td>${u.user}</td><td>${u.level}</td>
-                <td><button class="btn btn-del" onclick="delUser(${idx})">✕</button></td></tr>`;
-        });
-        document.getElementById('tbl-users-corpo').innerHTML = hUsr;
+        document.getElementById('orc-lista-corpo').innerHTML = db.orc_temp.map((o, idx) => `<tr><td>${o.qtd}</td><td>${o.desc}</td><td>R$ ${o.val.toFixed(2)}</td><td>R$ ${(o.val*o.qtd).toFixed(2)}</td><td class="no-print"><button class="btn btn-del" onclick="delItemOrc(${idx})">✕</button></td></tr>`).join('');
+        
+        document.getElementById('orc-cli-sel').innerHTML = '<option value="">Selecionar Cliente</option>' + db.clientes.map(c => `<option value="${c.nome}">${c.nome}</option>`).join('');
+        
+        document.getElementById('tbl-log-corpo').innerHTML = [...db.movimentacoes].reverse().map(m => `<tr><td>${m.data}</td><td>${m.produto}</td><td>${m.qtd}</td><td>${m.destino}</td></tr>`).join('');
+        
+        document.getElementById('tbl-users-corpo').innerHTML = db.users.map((u, idx) => `<tr><td>${u.user}</td><td>${u.level}</td><td><button class="btn btn-del" onclick="delUser(${idx})">✕</button></td></tr>`).join('');
+        
+        calculateTotal();
     }
 </script>
 </body>
