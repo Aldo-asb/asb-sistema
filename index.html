@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#1a1a1a">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Gestão ASB ENG - v85.0</title>
+    <title>Gestão ASB ENG - v86.0</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
@@ -265,7 +265,7 @@
 </div>
 
 <script>
-    // CONFIGURAÇÃO FIREBASE - v85.0
+    // CONFIGURAÇÃO FIREBASE - v86.0
     const firebaseConfig = {
         apiKey: "AIzaSyA8rHSh4HW_bSVzccYPb49aQJ5QlvakAKo",
         authDomain: "asb-sistema.firebaseapp.com",
@@ -335,7 +335,7 @@
         document.querySelectorAll('.section-panel').forEach(s => s.classList.remove('active'));
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
         document.getElementById(id).classList.add('active');
-        btn.classList.add('active');
+        if(btn) btn.classList.add('active');
         render();
     }
 
@@ -537,102 +537,170 @@
         db.orc_temp = []; 
         currentEditingOrcId = null;
         document.getElementById('btn-finalizar-orc').innerText = "✅ FINALIZAR E SALVAR";
-        save(); 
-        alert("Orçamento registrado!");
+        save();
+        alert("Orçamento salvo no Histórico!");
+        openTab('tab-relatorios', document.querySelectorAll('.nav-btn')[3]);
     }
 
-    function editarHistOrc(id) {
-        const h = db.historico.find(x => x.id === id);
-        if(!h) return;
-        if(h.status === 'Aprovado') return alert("Orçamentos aprovados não podem ser editados.");
-        
-        if(confirm("Carregar este orçamento para edição? Isso limpará o orçamento atual.")) {
-            db.orc_temp = [...h.itens];
-            currentEditingOrcId = h.id;
+    function editarOrc(id) {
+        const orc = db.historico.find(h => h.id === id);
+        if(orc) {
+            db.orc_temp = [...orc.itens];
+            currentEditingOrcId = orc.id;
             
-            openTab('tab-orcamento', document.querySelector('button[onclick*="tab-orcamento"]'));
+            // Abre a aba de orçamento
+            openTab('tab-orcamento', document.querySelectorAll('.nav-btn')[2]);
             
-            setTimeout(() => {
-                document.getElementById('orc-cli-sel').value = h.cliente;
-                document.getElementById('orc-perc-acess').value = h.perc_acess || '';
-                document.getElementById('orc-mo-fixo').value = h.mo_fixo || '';
-                document.getElementById('orc-perc-mo').value = h.perc_mo || '';
-                document.getElementById('btn-finalizar-orc').innerText = "💾 ATUALIZAR ORÇAMENTO";
-                calculateTotal();
-                render();
-            }, 100);
+            // Preenche os campos de cliente e taxas
+            document.getElementById('orc-cli-sel').value = orc.cliente;
+            document.getElementById('orc-perc-acess').value = orc.perc_acess || 0;
+            document.getElementById('orc-mo-fixo').value = orc.mo_fixo || 0;
+            document.getElementById('orc-perc-mo').value = orc.perc_mo || 0;
+            
+            document.getElementById('btn-finalizar-orc').innerText = "💾 ATUALIZAR ORÇAMENTO";
+            
+            // Recalcula totais e renderiza
+            calculateTotal();
+            render();
+            save();
         }
     }
 
-    function updateStatus(id, newStatus) {
-        const h = db.historico.find(x => x.id === id);
-        if(h && newStatus === 'Aprovado') {
-            if(confirm("Deseja APROVAR? Isso dará baixa no estoque agora.")) {
-                h.itens.forEach(it => {
-                    const p = db.estoque.find(e => e.desc === it.desc);
-                    if(p) { 
-                        p.qtd -= it.qtd; 
-                        db.movimentacoes.push({data: new Date().toLocaleString(), produto: it.desc, qtd: it.qtd, destino: h.cliente}); 
+    function confirmarOrc(id) {
+        const idx = db.historico.findIndex(h => h.id === id);
+        if(idx !== -1 && confirm("Confirmar venda? Isso dará baixa no estoque.")) {
+            const orc = db.historico[idx];
+            let erroEstoque = false;
+
+            orc.itens.forEach(item => {
+                const prod = db.estoque.find(p => p.desc === item.desc);
+                if(prod) {
+                    if(prod.qtd >= item.qtd) {
+                        prod.qtd -= item.qtd;
+                        db.movimentacoes.push({
+                            data: new Date().toLocaleString(),
+                            prod: item.desc,
+                            qtd: item.qtd,
+                            dest: orc.cliente
+                        });
+                    } else {
+                        alert(`Estoque insuficiente para: ${item.desc}`);
+                        erroEstoque = true;
                     }
-                });
-                h.status = 'Aprovado';
-            } else { render(); return; }
-        } else if(h) { h.status = newStatus; }
-        save();
+                }
+            });
+
+            if(!erroEstoque) {
+                db.historico[idx].status = 'Confirmado';
+                save();
+            }
+        }
     }
 
-    function delHistItem(id) {
-        const h = db.historico.find(x => x.id === id);
-        if(h && h.status === 'Aprovado') return alert("Orçamentos aprovados não podem ser excluídos por segurança.");
+    function delOrc(id) {
         if(confirm("Excluir este registro do histórico?")) {
             db.historico = db.historico.filter(h => h.id !== id);
             save();
         }
     }
 
-    function refreshTemperature() {
-        document.getElementById('temp-val').innerText = (Math.random() * (26 - 20) + 20).toFixed(1) + "°C";
+    function render(filter = '') {
+        // Render Estoque
+        const searchEst = document.getElementById('search-est-input').value.toUpperCase();
+        const tblEst = document.getElementById('tbl-estoque-corpo');
+        tblEst.innerHTML = '';
+        db.estoque.forEach((i, idx) => {
+            if(filter === 'all' || i.desc.toUpperCase().includes(searchEst)) {
+                tblEst.innerHTML += `<tr>
+                    <td>${i.desc}</td><td>${i.unid}</td><td>${i.ncm}</td><td>${i.cfop}</td>
+                    <td>R$ ${i.val.toFixed(2)}</td>
+                    <td style="color:${i.qtd < 3 ? 'red':'inherit'}; font-weight:bold">${i.qtd}</td>
+                    <td class="no-print">
+                        <button class="btn btn-edit" onclick="editEstItem(${idx})">EDITAR</button>
+                        <button class="btn btn-del" onclick="delEstItem(${idx})">X</button>
+                    </td>
+                </tr>`;
+            }
+        });
+
+        // Render Clientes
+        const searchCli = document.getElementById('search-cli-input').value.toUpperCase();
+        const tblCli = document.getElementById('tbl-clientes-corpo');
+        const selCliOrc = document.getElementById('orc-cli-sel');
+        const currentCli = selCliOrc.value;
+        tblCli.innerHTML = '';
+        selCliOrc.innerHTML = '<option value="">Selecionar Cliente</option>';
+        db.clientes.forEach((c, idx) => {
+            if(filter === 'all' || c.nome.toUpperCase().includes(searchCli)) {
+                tblCli.innerHTML += `<tr>
+                    <td><b>${c.nome}</b><br><small>${c.doc}</small></td>
+                    <td>${c.tel}<br><small>${c.email}</small></td>
+                    <td>${c.cidade}/${c.uf}</td>
+                    <td>${c.ultima_compra}</td>
+                    <td class="no-print">
+                        <button class="btn btn-edit" onclick="editCliente(${idx})">EDITAR</button>
+                        <button class="btn btn-del" onclick="delCliente(${idx})">X</button>
+                    </td>
+                </tr>`;
+            }
+            selCliOrc.innerHTML += `<option value="${c.nome}">${c.nome}</option>`;
+        });
+        selCliOrc.value = currentCli;
+
+        // Render Orçamento Atual
+        const tblOrc = document.getElementById('orc-lista-corpo');
+        tblOrc.innerHTML = '';
+        db.orc_temp.forEach((o, idx) => {
+            tblOrc.innerHTML += `<tr>
+                <td>${o.qtd}</td><td>${o.desc}</td><td>R$ ${o.val.toFixed(2)}</td><td>R$ ${(o.val * o.qtd).toFixed(2)}</td>
+                <td class="no-print"><button class="btn btn-del" onclick="delItemOrc(${idx})">REMOVER</button></td>
+            </tr>`;
+        });
+        calculateTotal();
+
+        // Render Histórico
+        const searchHist = document.getElementById('search-hist').value.toUpperCase();
+        const tblHist = document.getElementById('tbl-historico-corpo');
+        tblHist.innerHTML = '';
+        db.historico.forEach(h => {
+            if(h.cliente.toUpperCase().includes(searchHist)) {
+                const statusColor = h.status === 'Pendente' ? 'orange' : 'green';
+                tblHist.innerHTML += `<tr>
+                    <td>${h.data}</td><td>${h.cliente}</td><td>R$ ${h.total.toFixed(2)}</td>
+                    <td style="color:${statusColor}; font-weight:bold">${h.status}</td>
+                    <td class="no-print">
+                        <button class="btn btn-edit" onclick="editarOrc(${h.id})">EDITAR/VER</button>
+                        ${h.status === 'Pendente' ? `<button class="btn btn-add" style="background:green" onclick="confirmarOrc(${h.id})">CONFIRMAR</button>` : ''}
+                        <button class="btn btn-del" onclick="delOrc(${h.id})">X</button>
+                    </td>
+                </tr>`;
+            }
+        });
+
+        // Render Logs
+        const tblLog = document.getElementById('tbl-log-corpo');
+        tblLog.innerHTML = '';
+        [...db.movimentacoes].reverse().forEach(m => {
+            tblLog.innerHTML += `<tr><td>${m.data}</td><td>${m.prod}</td><td>${m.qtd}</td><td>${m.dest}</td></tr>`;
+        });
     }
 
-    function render() {
-        const sEst = document.getElementById('search-est-input').value.toUpperCase();
-        document.getElementById('tbl-estoque-corpo').innerHTML = db.estoque
-            .filter(i => i.desc.toUpperCase().includes(sEst))
-            .map((i, idx) => `<tr><td>${i.desc}</td><td>${i.unid}</td><td>${i.ncm}</td><td>${i.cfop}</td><td>R$ ${i.val.toFixed(2)}</td><td>${i.qtd}</td><td class="no-print"><button class="btn btn-edit" onclick="editEstItem(${idx})">✎</button><button class="btn btn-del" onclick="delEstItem(${idx})">✕</button></td></tr>`).join('');
-
-        const sCli = document.getElementById('search-cli-input').value.toUpperCase();
-        document.getElementById('tbl-clientes-corpo').innerHTML = db.clientes
-            .filter(c => c.nome.toUpperCase().includes(sCli))
-            .map((c, idx) => `<tr><td>${c.nome} / ${c.doc}</td><td>${c.tel}</td><td>${c.cidade}/${c.uf}</td><td>${c.ultima_compra}</td><td class="no-print"><button class="btn btn-edit" onclick="editCliente(${idx})">✎</button><button class="btn btn-del" onclick="delCliente(${idx})">✕</button></td></tr>`).join('');
-
-        const sHist = document.getElementById('search-hist').value.toUpperCase();
-        document.getElementById('tbl-historico-corpo').innerHTML = [...db.historico].reverse()
-            .filter(h => h.cliente.toUpperCase().includes(sHist))
-            .map(h => `<tr><td>${h.data}</td><td>${h.cliente}</td><td>R$ ${h.total.toFixed(2)}</td><td>
-                <select onchange="updateStatus(${h.id}, this.value)">
-                    <option ${h.status==='Pendente'?'selected':''}>Pendente</option>
-                    <option ${h.status==='Aprovado'?'selected':''}>Aprovado</option>
-                    <option ${h.status==='Cancelado'?'selected':''}>Cancelado</option>
-                </select></td><td class="no-print"><button class="btn btn-edit" onclick="editarHistOrc(${h.id})">✎</button><button class="btn btn-del" onclick="delHistItem(${h.id})">✕</button></td></tr>`).join('');
-
-        document.getElementById('orc-lista-corpo').innerHTML = db.orc_temp.map((o, idx) => `<tr><td>${o.qtd}</td><td>${o.desc}</td><td>R$ ${o.val.toFixed(2)}</td><td>R$ ${(o.val*o.qtd).toFixed(2)}</td><td class="no-print"><button class="btn btn-del" onclick="delItemOrc(${idx})">✕</button></td></tr>`).join('');
-        document.getElementById('orc-cli-sel').innerHTML = '<option value="">Selecionar Cliente</option>' + db.clientes.map(c => `<option value="${c.nome}">${c.nome}</option>`).join('');
-        document.getElementById('tbl-log-corpo').innerHTML = [...db.movimentacoes].reverse().map(m => `<tr><td>${m.data}</td><td>${m.produto}</td><td>${m.qtd}</td><td>${m.destino}</td></tr>`).join('');
-        
-        const uTbl = document.getElementById('tbl-users-corpo');
-        if(uTbl) uTbl.innerHTML = db.users.map((u, idx) => `<tr><td>${u.user}</td><td>${u.level}</td><td>${u.user!=='admin'?`<button class="btn btn-del" onclick="db.users.splice(${idx},1);save()">✕</button>`:''}</td></tr>`).join('');
-        
-        calculateTotal();
+    async function refreshTemperature() {
+        const el = document.getElementById('temp-val');
+        el.innerText = "Lendo...";
+        try {
+            const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=-16.68&longitude=-49.25&current_weather=true');
+            const data = await res.json();
+            el.innerText = data.current_weather.temperature + "°C";
+        } catch { el.innerText = "Erro"; }
     }
 
     function exportDB() {
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db));
-        const downloadAnchorNode = document.createElement('a');
-        downloadAnchorNode.setAttribute("href", dataStr);
-        downloadAnchorNode.setAttribute("download", "backup_asb_" + new Date().toLocaleDateString() + ".json");
-        document.body.appendChild(downloadAnchorNode);
-        downloadAnchorNode.click();
-        downloadAnchorNode.remove();
+        const dlAnchorElem = document.createElement('a');
+        dlAnchorElem.setAttribute("href", dataStr);
+        dlAnchorElem.setAttribute("download", `asb_backup_${new Date().toLocaleDateString()}.json`);
+        dlAnchorElem.click();
     }
 
     function importDB(input) {
@@ -641,24 +709,29 @@
         reader.onload = function(e) {
             try {
                 const imported = JSON.parse(e.target.result);
-                if(confirm("Deseja substituir TODOS os dados da nuvem por este arquivo?")) {
+                if(confirm("Isso substituirá todos os dados da nuvem. Continuar?")) {
                     db = imported;
                     save();
                     alert("Importação concluída!");
-                    location.reload();
                 }
-            } catch(err) { alert("Erro ao ler arquivo JSON."); }
+            } catch { alert("Arquivo JSON inválido."); }
         };
         reader.readAsText(file);
     }
 
-    function forceRealtimeSync() { initCloud(); alert("Canal de dados reiniciado!"); }
-    function limparHistoricoGeral() { if(confirm("CUIDADO! Isso apagará todo o histórico e movimentações. Continuar?")) { db.historico = []; db.movimentacoes = []; save(); } }
-    function addNewUser() {
-        const u = document.getElementById('new-user').value.trim();
-        const p = document.getElementById('new-pass').value.trim();
-        if(u && p) { db.users.push({user:u, pass:p, level:'operador'}); save(); alert("Usuário criado!"); }
+    function limparHistoricoGeral() {
+        if(confirm("ATENÇÃO: Isso apagará todo o histórico e logs de movimentação permanentemente. Confirmar?")) {
+            db.historico = [];
+            db.movimentacoes = [];
+            save();
+        }
+    }
+
+    function forceRealtimeSync() {
+        initCloud();
+        alert("Sincronização reiniciada com o Firebase.");
     }
 </script>
+
 </body>
 </html>
