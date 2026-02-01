@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#1a1a1a">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Gestão ASB ENG - v104.0</title>
+    <title>Gestão ASB ENG - v105.0</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
@@ -60,12 +60,12 @@
         input, select { padding: 12px; border: 1px solid #ccc; border-radius: 6px; width: 100%; box-sizing: border-box; font-size: 14px; }
         
         table { width: 100%; border-collapse: collapse; margin-top: 15px; border: 1px solid #eee; border-radius: 8px; overflow: hidden; }
-        th { background: #fdfdfd; padding: 10px 15px; text-align: left; border-bottom: 2px solid #eee; font-size: 11px; color: #888; text-transform: uppercase; }
+        th { background: #fdfdfd; padding: 8px 15px; text-align: left; border-bottom: 2px solid #eee; font-size: 11px; color: #888; text-transform: uppercase; }
         
-        /* CORREÇÃO 1: Redução cirúrgica do espaçamento das linhas */
-        td { padding: 2px 15px !important; border-bottom: 1px solid #f6f6f6; font-size: 13px; line-height: 1.1 !important; height: 26px; }
+        /* CORREÇÃO 1: Espaçamento reduzido cirurgicamente */
+        td { padding: 3px 15px !important; border-bottom: 1px solid #f6f6f6; font-size: 13px; line-height: 1.1 !important; height: 26px; }
         
-        .btn { padding: 10px 20px; border: none; border-radius: 6px; color: white; cursor: pointer; font-weight: bold; text-transform: uppercase; transition: 0.3s; height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 11px; }
+        .btn { padding: 10px 20px; border: none; border-radius: 6px; color: white; cursor: pointer; font-weight: bold; text-transform: uppercase; transition: 0.3s; height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 10px; }
         .btn-add { background: var(--asb-success-grad); }
         .btn-new { background: #6c757d; }
         .btn-edit { background: #ffc107; color: #000; padding: 5px 12px; height: 30px; }
@@ -73,17 +73,17 @@
         .btn-print { background: var(--asb-blue-grad); width: 100%; margin-top: 15px; height: 50px; font-size: 14px; }
 
         .summary-box { background: #f8f9fa; padding: 15px; margin-top: 15px; border-radius: 10px; border: 1px solid #eee; }
-        .summary-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #eee; font-size: 14px; }
+        .summary-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #eee; font-size: 13px; }
 
         @media print {
-            body { background: white; }
+            body { background: white !important; }
             nav, .no-print, .search-hero, header, .form-grid, .btn { display: none !important; }
-            .container { box-shadow: none; border: none; width: 100%; margin: 0; padding: 0; }
+            .container { box-shadow: none; border: none; width: 100% !important; margin: 0; padding: 0; }
             .section-panel { display: none !important; }
             #tab-orcamento.active { display: block !important; }
             table th:last-child, table td:last-child { display: none !important; }
             .summary-box { border: 1px solid #333; }
-            td { padding: 1px 10px !important; font-size: 11px !important; height: 20px !important; }
+            td { padding: 1px 10px !important; font-size: 11px !important; height: 18px !important; }
         }
     </style>
 </head>
@@ -262,6 +262,7 @@
 </div>
 
 <script>
+    // CONFIGURAÇÃO FIREBASE - v105.0
     const firebaseConfig = {
         apiKey: "AIzaSyA8rHSh4HW_bSVzccYPb49aQJ5QlvakAKo",
         authDomain: "asb-sistema.firebaseapp.com",
@@ -307,7 +308,7 @@
             document.getElementById('welcome-msg').innerText = `Logado: ${u.toUpperCase()}`;
             if((found && found.level === 'master') || u === 'admin') document.getElementById('nav-master').style.display = 'block';
             refreshTemperature(); render();
-        } else { alert("Erro de Login"); }
+        } else { alert("Dados incorretos."); }
     }
 
     function openTab(id, btn) {
@@ -353,15 +354,12 @@
         document.getElementById('est-qtd').value = i.qtd;
         editingEstoqueIndex = idx;
         mostrarFormEstoque();
-        document.querySelectorAll('#tab-estoque .edit-only').forEach(e => e.style.display = 'flex');
         document.getElementById('btn-save-est').innerText = "ATUALIZAR";
     }
 
     function cancelarEdicao() {
         editingEstoqueIndex = null;
         document.getElementById('form-estoque').style.display = 'none';
-        document.querySelectorAll('#tab-estoque .edit-only').forEach(e => e.style.display = 'none');
-        document.getElementById('btn-save-est').innerText = "SALVAR";
         ['est-desc','est-unid','est-ncm','est-cfop','est-cst','est-ipi','est-icms','est-compra','est-markup','est-val','est-qtd'].forEach(id => document.getElementById(id).value = '');
     }
 
@@ -461,12 +459,11 @@
         return total;
     }
 
-    // CORREÇÃO 2: Registro e Edição do Histórico
+    // MUDANÇA 2 & 3: Registro de Histórico e Movimentação Automática
     function finalizarERegistrar() {
         const cli = document.getElementById('orc-cli-sel').value;
-        if(!cli || !db.orc_temp || db.orc_temp.length === 0) return alert("Selecione cliente e adicione itens!");
+        if(!cli || !db.orc_temp || db.orc_temp.length === 0) return alert("Erro nos dados!");
         if(!db.historico) db.historico = [];
-        
         const orcData = { 
             id: currentEditingOrcId || Date.now(), 
             data: new Date().toLocaleString(), 
@@ -478,25 +475,20 @@
             mo_fixo: document.getElementById('orc-mo-fixo').value,
             perc_mo: document.getElementById('orc-perc-mo').value
         };
-
         if(currentEditingOrcId) {
             const idx = db.historico.findIndex(x => x.id === currentEditingOrcId);
             db.historico[idx] = orcData;
         } else { db.historico.push(orcData); }
-
-        const cObj = db.clientes.find(c => c.nome === cli);
-        if(cObj) cObj.ultima_compra = new Date().toLocaleString();
         db.orc_temp = []; currentEditingOrcId = null;
         document.getElementById('btn-finalizar-orc').innerText = "✅ FINALIZAR E SALVAR";
-        save(); alert("Orçamento registrado!");
+        save(); alert("Orçamento salvo!");
     }
 
-    // CORREÇÃO 3: Movimentação automática ao Aprovar
     function updateStatus(id, newStatus) {
         const h = db.historico.find(x => x.id === id);
         if(h && h.status !== newStatus) {
             if(newStatus === 'Aprovado') {
-                if(confirm("Confirmar aprovação? Isso reduzirá o estoque e registrará a saída.")) {
+                if(confirm("Confirmar aprovação? Irá registrar a saída no estoque.")) {
                     h.itens.forEach(it => {
                         const p = db.estoque.find(e => e.desc === it.desc);
                         if(p) { 
@@ -522,7 +514,7 @@
             document.getElementById('orc-perc-acess').value = h.perc_acess || 0;
             document.getElementById('orc-mo-fixo').value = h.mo_fixo || 0;
             document.getElementById('orc-perc-mo').value = h.perc_mo || 0;
-            document.getElementById('btn-finalizar-orc').innerText = "💾 ATUALIZAR ORÇAMENTO";
+            document.getElementById('btn-finalizar-orc').innerText = "💾 ATUALIZAR";
             render();
         }
     }
@@ -545,27 +537,23 @@
     }
 
     function exportDB() {
-        const blob = new Blob([JSON.stringify(db)], {type: 'application/json'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url; a.download = `ASB_BACKUP.json`; a.click();
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db));
+        const a = document.createElement('a'); a.href = dataStr; a.download = "ASB_BACKUP.json"; a.click();
     }
 
     function importDB(input) {
         const reader = new FileReader();
         reader.onload = function() {
-            try {
-                const imported = JSON.parse(reader.result);
-                if(confirm("Substituir dados atuais?")) { db = imported; save(); alert("Importação completa!"); }
-            } catch(e) { alert("JSON Inválido."); }
+            db = JSON.parse(reader.result); save(); alert("Sucesso!");
         };
         reader.readAsText(input.files[0]);
     }
 
     function limparHistoricoGeral() {
-        if(confirm("Deseja apagar histórico e logs?")) { db.historico = []; db.movimentacoes = []; save(); }
+        if(confirm("Apagar tudo?")) { db.historico = []; db.movimentacoes = []; save(); }
     }
 
-    function forceRealtimeSync() { initCloud(); alert("Canal Cloud Reiniciado."); }
+    function forceRealtimeSync() { initCloud(); alert("Reiniciado!"); }
 
     function render(filter) {
         if(!db) return;
