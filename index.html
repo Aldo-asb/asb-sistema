@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#1a1a1a">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Gestão ASB ENG - v129.0</title>
+    <title>Gestão ASB ENG - v113.0</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
@@ -72,13 +72,6 @@
 
         .hide-table { display: none; }
 
-        /* CSS DO MÓDULO IA - ALOCADO ADICIONALMENTE */
-        #chat-container { height: 400px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 15px; background: #fdfdfd; display: flex; flex-direction: column; gap: 12px; }
-        .msg { max-width: 85%; padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.5; }
-        .msg-user { align-self: flex-end; background: var(--asb-blue-grad); color: white; border-bottom-right-radius: 2px; }
-        .msg-ai { align-self: flex-start; background: #f1f1f1; border-left: 4px solid var(--asb-blue); color: #333; border-bottom-left-radius: 2px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); }
-        .chat-input-area { display: flex; gap: 10px; margin-top: 15px; }
-
         @media print {
             body { background: white !important; }
             nav, .no-print, .search-hero, header, .form-grid, .btn { display: none !important; }
@@ -88,8 +81,7 @@
             #table-estoque, #table-clientes, #table-historico, #orc-area { display: table !important; }
             #orc-area { display: block !important; }
             table th:last-child, table td:last-child { display: none !important; }
-            .summary-box { border: 1px solid #333; padding: 10px; margin-top: 10px;}
-            .summary-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
+            .summary-box { border: 1px solid #333; }
             td { padding: 0px 10px !important; font-size: 11px !important; height: 16px !important; }
         }
     </style>
@@ -128,27 +120,9 @@
             <button class="nav-btn" onclick="openTab('tab-orcamento', this)">ORÇAMENTO</button>
             <button class="nav-btn" onclick="openTab('tab-relatorios', this)">HISTÓRICO</button>
             <button class="nav-btn" onclick="openTab('tab-movimentacao', this)">MOVIMENTAÇÃO</button>
-            <button class="nav-btn" style="background: #4a148c; color: white;" onclick="openTab('tab-ia', this)">🤖 IA CONSULTOR</button>
             <button id="nav-master" class="nav-btn" style="display:none" onclick="openTab('tab-master', this)">USUÁRIOS</button>
             <button class="nav-btn" onclick="openTab('tab-config', this)">CONFIG</button>
         </nav>
-
-        <section id="tab-ia" class="section-panel">
-            <h3 style="margin-top:0;">🤖 Agente Inteligente ASB</h3>
-            <div id="chat-container">
-                <div class="msg msg-ai">Olá! Sou o assistente de engenharia da ASB. Analiso seu banco de dados em tempo real. Você pode me perguntar sobre: 
-                    <br>• "Quais produtos estão acabando?"
-                    <br>• "Qual o valor total do meu estoque?"
-                    <br>• "Resumo financeiro dos orçamentos"
-                    <br>• "Cálculo de queda de tensão ou motores"
-                </div>
-            </div>
-            <div class="chat-input-area no-print">
-                <input type="text" id="chat-input" placeholder="Digite sua dúvida técnica ou consulta..." onkeypress="if(event.key==='Enter') sendChat()">
-                <button class="btn btn-del" style="border-radius: 50%; width: 45px; height: 45px; background: #f44336;" onclick="startVoiceRecognition()">🎤</button>
-                <button class="btn btn-add" style="height:45px;" onclick="sendChat()">ENVIAR</button>
-            </div>
-        </section>
 
         <section id="tab-estoque" class="section-panel active">
             <div class="search-hero">
@@ -451,7 +425,7 @@
         sel.innerHTML = '<option value="">Pesquise...</option>';
         if(term && db.estoque) {
             db.estoque.filter(i => i.desc.toUpperCase().includes(term)).forEach(i => {
-                sel.innerHTML += `<option value="${i.desc}">${i.desc} (R$ ${parseFloat(i.val).toFixed(2)})</option>`;
+                sel.innerHTML += `<option value="${i.desc}">${i.desc} (R$ ${i.val.toFixed(2)})</option>`;
             });
         }
     }
@@ -585,6 +559,8 @@
 
     function render(filter) {
         if(!db) return;
+
+        // ESTOQUE
         const sEst = document.getElementById('search-est-input').value.toUpperCase();
         const tableEst = document.getElementById('table-estoque');
         const estTbody = document.getElementById('tbl-estoque-corpo');
@@ -599,6 +575,8 @@
                 });
             } else { tableEst.classList.add('hide-table'); }
         }
+
+        // CLIENTES
         const sCli = document.getElementById('search-cli-input').value.toUpperCase();
         const tableCli = document.getElementById('table-clientes');
         const cliTbody = document.getElementById('tbl-clientes-corpo');
@@ -613,6 +591,8 @@
                 });
             } else { tableCli.classList.add('hide-table'); }
         }
+
+        // ORÇAMENTO
         const orcCliSel = document.getElementById('orc-cli-sel');
         if(orcCliSel && db.clientes) {
             const current = orcCliSel.value;
@@ -631,6 +611,8 @@
             } else { orcArea.classList.add('hide-table'); }
             calculateTotal();
         }
+
+        // HISTÓRICO
         const sHist = document.getElementById('search-hist').value.toUpperCase();
         const tableHist = document.getElementById('table-historico');
         const histTbody = document.getElementById('tbl-historico-corpo');
@@ -645,6 +627,8 @@
                 });
             } else { tableHist.classList.add('hide-table'); }
         }
+
+        // MOVIMENTAÇÃO
         const logTbody = document.getElementById('tbl-log-corpo');
         if(logTbody) {
             logTbody.innerHTML = '';
@@ -652,6 +636,8 @@
                 logTbody.innerHTML += `<tr><td>${m.data}</td><td>${m.produto}</td><td>${m.qtd}</td><td>${m.destino}</td></tr>`;
             });
         }
+        
+        // USUÁRIOS
         const userTbody = document.getElementById('tbl-users-corpo');
         if(userTbody) {
             userTbody.innerHTML = '';
@@ -660,77 +646,7 @@
             });
         }
     }
-
-    /* --- CÉREBRO AVANÇADO DO AGENTE IA (ALOCADO NO FINAL) --- */
-    function addChatMessage(role, text) {
-        const container = document.getElementById('chat-container');
-        const div = document.createElement('div');
-        div.className = `msg msg-${role}`;
-        div.innerHTML = text;
-        container.appendChild(div);
-        container.scrollTop = container.scrollHeight;
-    }
-
-    async function sendChat() {
-        const input = document.getElementById('chat-input');
-        const text = input.value.trim();
-        if(!text) return;
-        addChatMessage('user', text);
-        input.value = '';
-
-        let response = "";
-        const t = text.toLowerCase();
-
-        // LÓGICA DE ANÁLISE DE ESTOQUE CRÍTICO
-        if(t.includes("acabando") || t.includes("estoque baixo") || t.includes("crítico")) {
-            const criticos = db.estoque.filter(i => i.qtd <= 3);
-            if(criticos.length > 0) {
-                response = "⚠️ <strong>Itens com estoque baixo:</strong><br>" + criticos.map(i => `• ${i.desc}: ${i.qtd} un.`).join("<br>");
-            } else { response = "✅ Todos os itens estão com saldo acima de 3 unidades."; }
-        }
-        // VALOR PATRIMONIAL DO ESTOQUE
-        else if(t.includes("valor total") || t.includes("patrimônio")) {
-            let totalVenda = 0; let totalCusto = 0;
-            db.estoque.forEach(i => { totalVenda += (i.val * i.qtd); totalCusto += (i.compra * i.qtd); });
-            response = `💰 <strong>Análise de Patrimônio:</strong><br>• Valor Total Venda: R$ ${totalVenda.toLocaleString('pt-BR', {minimumFractionDigits: 2})}<br>• Valor Total Custo: R$ ${totalCusto.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
-        }
-        // RESUMO FINANCEIRO
-        else if(t.includes("resumo") || t.includes("financeiro") || t.includes("orçamentos")) {
-            let aprovados = db.historico.filter(h => h.status === 'Aprovado').reduce((acc, curr) => acc + curr.total, 0);
-            let pendentes = db.historico.filter(h => h.status === 'Pendente').reduce((acc, curr) => acc + curr.total, 0);
-            response = `📊 <strong>Resumo de Orçamentos:</strong><br>• Total Aprovado: R$ ${aprovados.toFixed(2)}<br>• Total Pendente: R$ ${pendentes.toFixed(2)}`;
-        }
-        // CONSULTA DE ITEM ESPECÍFICO
-        else if(t.includes("preço") || t.includes("estoque") || t.includes("quanto custa")) {
-            const busca = db.estoque.find(i => t.includes(i.desc.toLowerCase()));
-            if(busca) { response = `✅ <strong>${busca.desc}</strong><br>• Preço: R$ ${parseFloat(busca.val).toFixed(2)}<br>• Saldo: ${busca.qtd} ${busca.unid}<br>• NCM: ${busca.ncm}`; }
-            else { response = "Não localizei esse item exato. Tente digitar o nome principal do produto."; }
-        }
-        // ENGENHARIA ELÉTRICA
-        else if(t.includes("motor") || t.includes("cv") || t.includes("cabo")) {
-            const cvMatch = t.match(/\d+/);
-            const cv = cvMatch ? parseFloat(cvMatch[0]) : 0;
-            if(cv > 0) {
-                const amp = (cv * 736) / (1.73 * 380 * 0.85 * 0.8);
-                let bitola = amp > 21 ? (amp > 28 ? "6.0mm²" : "4.0mm²") : "2.5mm²";
-                response = `⚙️ <strong>Dimensionamento ASB:</strong><br>Para motor de ${cv}CV em 380V:<br>• Corrente: ~${amp.toFixed(1)}A<br>• Bitola (NBR 5410): ${bitola}`;
-            } else { response = "Qual a potência do motor em CV para eu calcular?"; }
-        }
-        else { response = "Como assistente da ASB, posso analisar seu estoque, finanças e engenharia. Tente perguntar: <i>'Qual o valor total do meu estoque?'</i> ou <i>'Quais itens estão acabando?'</i>"; }
-
-        setTimeout(() => addChatMessage('ai', response), 600);
-    }
-
-    function startVoiceRecognition() {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) return alert("Erro: Navegador sem suporte a voz.");
-        const rec = new SpeechRecognition();
-        rec.lang = 'pt-BR'; rec.start();
-        rec.onresult = (e) => {
-            document.getElementById('chat-input').value = e.results[0][0].transcript;
-            sendChat();
-        };
-    }
 </script>
 </body>
 </html>
+
