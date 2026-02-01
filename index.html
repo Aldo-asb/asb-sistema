@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#1a1a1a">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Gestão ASB ENG - v112.0</title>
+    <title>Gestão ASB ENG - v113.0</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
@@ -67,7 +67,7 @@
         .btn-add { background: var(--asb-success-grad); }
         .btn-new { background: #6c757d; }
         .btn-edit { background: #ffc107; color: #000; padding: 5px 12px; height: 30px; }
-        .btn-del { background: #e74c3c; padding: 5px 12px; height: 30px; }
+        .btn-del { background: #dc3545; padding: 5px 12px; height: 30px; }
         .btn-print { background: var(--asb-blue-grad); width: 100%; margin-top: 15px; height: 50px; font-size: 14px; }
 
         .hide-table { display: none; }
@@ -78,7 +78,6 @@
             .container { box-shadow: none; border: none; width: 100% !important; margin: 0; padding: 0; }
             .section-panel { display: none !important; }
             #tab-estoque.active, #tab-clientes.active, #tab-orcamento.active { display: block !important; }
-            /* CORREÇÃO 2 & 3: Forçar exibição das tabelas para o PDF não sair em branco */
             #table-estoque, #table-clientes, #table-historico, #orc-area { display: table !important; }
             #orc-area { display: block !important; }
             table th:last-child, table td:last-child { display: none !important; }
@@ -134,13 +133,15 @@
             </div>
             <div class="form-grid" id="form-estoque">
                 <div class="field-group" style="grid-column: span 2;"><label>Produto / Descrição</label><input type="text" id="est-desc"></div>
-                <div class="field-group"><label>Unid.</label><input type="text" id="est-unid" placeholder="Ex: UN, PC, KG"></div>
+                <div class="field-group"><label>Unid.</label><input type="text" id="est-unid"></div>
                 <div class="field-group"><label>NCM</label><input type="text" id="est-ncm"></div>
+                <div class="field-group"><label>CFOP</label><input type="text" id="est-cfop"></div>
+                <div class="field-group"><label>CST</label><input type="text" id="est-cst"></div>
                 <div class="field-group"><label>Preço Compra (R$)</label><input type="number" id="est-compra" oninput="calcVenda()"></div>
                 <div class="field-group"><label>Markup (%)</label><input type="number" id="est-markup" oninput="calcVenda()"></div>
                 <div class="field-group"><label>IPI (%)</label><input type="number" id="est-ipi" oninput="calcVenda()"></div>
                 <div class="field-group"><label>ICMS (%)</label><input type="number" id="est-icms" oninput="calcVenda()"></div>
-                <div class="field-group"><label>Preço Venda Final</label><input type="number" id="est-val" step="0.01"></div>
+                <div class="field-group"><label>Valor Final (Venda)</label><input type="number" id="est-val" step="0.01"></div>
                 <div class="field-group"><label>Qtd em Estoque</label><input type="number" id="est-qtd"></div>
                 <div class="form-actions-column">
                     <button class="btn btn-add" id="btn-save-est" onclick="addEstoque()">SALVAR</button>
@@ -149,7 +150,7 @@
             </div>
             <table id="table-estoque">
                 <thead>
-                    <tr><th>Descrição</th><th>Unid.</th><th>NCM</th><th>Vlr. Venda</th><th>Estoque</th><th class="no-print">Ações</th></tr>
+                    <tr><th>Descrição</th><th>Unid.</th><th>NCM</th><th>CFOP</th><th>CST</th><th>Vlr. Venda</th><th>Estoque</th><th class="no-print">Ações</th></tr>
                 </thead>
                 <tbody id="tbl-estoque-corpo"></tbody>
             </table>
@@ -260,7 +261,6 @@
 </div>
 
 <script>
-    // FIREBASE INTEGRAL
     const firebaseConfig = {
         apiKey: "AIzaSyA8rHSh4HW_bSVzccYPb49aQJ5QlvakAKo",
         authDomain: "asb-sistema.firebaseapp.com",
@@ -320,7 +320,7 @@
         render();
     }
 
-    // MUDANÇA 1: Função de cálculo de impostos
+    // Cálculo automático de preço de venda (Custo + Markup + IPI + ICMS)
     function calcVenda() {
         const compra = parseFloat(document.getElementById('est-compra').value) || 0;
         const mark = parseFloat(document.getElementById('est-markup').value) || 0;
@@ -334,11 +334,14 @@
     }
 
     function mostrarFormEstoque() { document.getElementById('form-estoque').style.display = 'grid'; }
+
     function addEstoque() {
         const item = {
             desc: document.getElementById('est-desc').value.trim(),
             unid: document.getElementById('est-unid').value.trim(),
             ncm: document.getElementById('est-ncm').value.trim(),
+            cfop: document.getElementById('est-cfop').value.trim(),
+            cst: document.getElementById('est-cst').value.trim(),
             compra: parseFloat(document.getElementById('est-compra').value) || 0,
             markup: parseFloat(document.getElementById('est-markup').value) || 0,
             ipi: parseFloat(document.getElementById('est-ipi').value) || 0,
@@ -359,6 +362,8 @@
         document.getElementById('est-desc').value = i.desc;
         document.getElementById('est-unid').value = i.unid;
         document.getElementById('est-ncm').value = i.ncm;
+        document.getElementById('est-cfop').value = i.cfop || "";
+        document.getElementById('est-cst').value = i.cst || "";
         document.getElementById('est-compra').value = i.compra || 0;
         document.getElementById('est-markup').value = i.markup || 0;
         document.getElementById('est-ipi').value = i.ipi || 0;
@@ -370,7 +375,7 @@
 
     function cancelarEdicao() {
         editingEstoqueIndex = null; document.getElementById('form-estoque').style.display = 'none';
-        ['est-desc','est-unid','est-ncm','est-compra','est-markup','est-ipi','est-icms','est-val','est-qtd'].forEach(id => document.getElementById(id).value = '');
+        ['est-desc','est-unid','est-ncm','est-cfop','est-cst','est-compra','est-markup','est-ipi','est-icms','est-val','est-qtd'].forEach(id => document.getElementById(id).value = '');
     }
 
     function mostrarFormCliente() { document.getElementById('form-cliente').style.display = 'grid'; }
@@ -418,7 +423,7 @@
         const term = document.getElementById('orc-search').value.toUpperCase();
         const sel = document.getElementById('orc-item-sel');
         sel.innerHTML = '<option value="">Pesquise...</option>';
-        if(db.estoque) {
+        if(term && db.estoque) {
             db.estoque.filter(i => i.desc.toUpperCase().includes(term)).forEach(i => {
                 sel.innerHTML += `<option value="${i.desc}">${i.desc} (R$ ${i.val.toFixed(2)})</option>`;
             });
@@ -565,7 +570,7 @@
                 tableEst.classList.remove('hide-table');
                 if(db.estoque) db.estoque.forEach((item, idx) => {
                     if(filter === 'all' || item.desc.toUpperCase().includes(sEst)) {
-                        estTbody.innerHTML += `<tr><td>${item.desc}</td><td>${item.unid}</td><td>${item.ncm}</td><td>R$ ${parseFloat(item.val).toFixed(2)}</td><td>${item.qtd}</td><td class="no-print"><button class="btn btn-edit" onclick="editEstItem(${idx})">EDIT</button><button class="btn btn-del" onclick="if(confirm('Excluir?')){db.estoque.splice(${idx},1);save();}">DEL</button></td></tr>`;
+                        estTbody.innerHTML += `<tr><td>${item.desc}</td><td>${item.unid}</td><td>${item.ncm}</td><td>${item.cfop || ""}</td><td>${item.cst || ""}</td><td>R$ ${parseFloat(item.val).toFixed(2)}</td><td>${item.qtd}</td><td class="no-print"><button class="btn btn-edit" onclick="editEstItem(${idx})">EDIT</button><button class="btn btn-del" onclick="if(confirm('Excluir?')){db.estoque.splice(${idx},1);save();}">DEL</button></td></tr>`;
                     }
                 });
             } else { tableEst.classList.add('hide-table'); }
