@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#1a1a1a">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Gestão ASB ENG - v110.0</title>
+    <title>Gestão ASB ENG - v111.0</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
@@ -90,6 +90,8 @@
             .summary-box { border: 1px solid #333; }
             td { padding: 0px 10px !important; font-size: 11px !important; height: 16px !important; }
         }
+        /* Lógica de ocultação de tabelas vazias */
+        .hide-table { display: none; }
     </style>
 </head>
 <body>
@@ -154,7 +156,7 @@
                     <button class="btn btn-new" onclick="cancelarEdicao()">CANCELAR</button>
                 </div>
             </div>
-            <table>
+            <table id="table-estoque">
                 <thead>
                     <tr><th>Descrição</th><th>Unid.</th><th>NCM</th><th>CFOP</th><th>Vlr. Venda</th><th>Estoque</th><th class="no-print">Ações</th></tr>
                 </thead>
@@ -183,7 +185,7 @@
                     <button class="btn btn-new" onclick="cancelarEdicaoCliente()">CANCELAR</button>
                 </div>
             </div>
-            <table>
+            <table id="table-clientes">
                 <thead><tr><th>Cliente / Doc</th><th>Contato</th><th>Cidade/UF</th><th>Última Compra</th><th class="no-print">Ações</th></tr></thead>
                 <tbody id="tbl-clientes-corpo"></tbody>
             </table>
@@ -203,7 +205,7 @@
                 <div class="field-group"><label>Mão de Obra (R$)</label><input type="number" id="orc-mo-fixo" oninput="calculateTotal()"></div>
                 <div class="field-group"><label>Mão de Obra (%)</label><input type="number" id="orc-perc-mo" oninput="calculateTotal()"></div>
             </div>
-            <div id="orc-area">
+            <div id="orc-area" class="hide-table">
                 <h2 style="text-align:center; border-bottom: 2px solid #000; padding-bottom:10px;">ORÇAMENTO - ASB AUTOMAÇÃO</h2>
                 <p id="orc-info-cliente" style="font-weight:bold;"></p>
                 <table>
@@ -225,7 +227,7 @@
 
         <section id="tab-relatorios" class="section-panel">
             <div class="search-hero"><input type="text" id="search-hist" placeholder="🔍 Filtrar histórico por cliente..." onkeyup="render()"></div>
-            <table>
+            <table id="table-historico">
                 <thead><tr><th>Data</th><th>Cliente</th><th>Valor</th><th>Status</th><th class="no-print">Ações</th></tr></thead>
                 <tbody id="tbl-historico-corpo"></tbody>
             </table>
@@ -267,7 +269,7 @@
 </div>
 
 <script>
-    // CONFIGURAÇÃO FIREBASE INTEGRAL - v110.0
+    // CONFIGURAÇÃO FIREBASE INTEGRAL - v111.0
     const firebaseConfig = {
         apiKey: "AIzaSyA8rHSh4HW_bSVzccYPb49aQJ5QlvakAKo",
         authDomain: "asb-sistema.firebaseapp.com",
@@ -320,7 +322,12 @@
         document.querySelectorAll('.section-panel').forEach(s => s.classList.remove('active'));
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
         document.getElementById(id).classList.add('active');
-        btn.classList.add('active'); render();
+        btn.classList.add('active');
+        // Ao trocar de aba, limpa as buscas para esconder as tabelas
+        document.getElementById('search-est-input').value = "";
+        document.getElementById('search-cli-input').value = "";
+        document.getElementById('search-hist').value = "";
+        render();
     }
 
     function mostrarFormEstoque() { document.getElementById('form-estoque').style.display = 'grid'; }
@@ -341,7 +348,9 @@
         if(!item.desc) return;
         if(editingEstoqueIndex !== null) db.estoque[editingEstoqueIndex] = item;
         else db.estoque.push(item);
-        cancelarEdicao(); save();
+        cancelarEdicao(); 
+        document.getElementById('search-est-input').value = ""; // Limpa busca para ocultar
+        save();
     }
 
     function editEstItem(idx) {
@@ -389,7 +398,9 @@
         if(!c.nome) return;
         if(editingClienteIndex !== null) db.clientes[editingClienteIndex] = c;
         else db.clientes.push(c);
-        cancelarEdicaoCliente(); save();
+        cancelarEdicaoCliente(); 
+        document.getElementById('search-cli-input').value = ""; // Limpa busca para ocultar
+        save();
     }
 
     function editCliente(idx) {
@@ -460,7 +471,6 @@
         return total;
     }
 
-    // MUDANÇA 2: FINALIZAÇÃO COM REGISTRO PARA EDIÇÃO
     function finalizarERegistrar() {
         const cli = document.getElementById('orc-cli-sel').value;
         if(!cli || !db.orc_temp || db.orc_temp.length === 0) return alert("Erro nos dados!");
@@ -490,7 +500,6 @@
         save(); alert("Orçamento registrado!");
     }
 
-    // MUDANÇA 3: MUDANÇA MANUAL E MOVIMENTAÇÃO AUTOMÁTICA
     function updateStatus(id, newStatus) {
         const h = db.historico.find(x => x.id === id);
         if(h && h.status !== newStatus) {
@@ -562,26 +571,40 @@
 
     function render(filter) {
         if(!db) return;
+
+        // --- ESTOQUE ---
+        const sEst = document.getElementById('search-est-input').value.toUpperCase();
+        const tableEst = document.getElementById('table-estoque');
         const estTbody = document.getElementById('tbl-estoque-corpo');
         if(estTbody) {
             estTbody.innerHTML = '';
-            const s = document.getElementById('search-est-input').value.toUpperCase();
-            if(db.estoque) db.estoque.forEach((item, idx) => {
-                if(filter === 'all' || item.desc.toUpperCase().includes(s)) {
-                    estTbody.innerHTML += `<tr><td>${item.desc}</td><td>${item.unid}</td><td>${item.ncm}</td><td>${item.cfop}</td><td>R$ ${parseFloat(item.val).toFixed(2)}</td><td>${item.qtd}</td><td class="no-print"><button class="btn btn-edit" onclick="editEstItem(${idx})">EDIT</button><button class="btn btn-del" onclick="if(confirm('Excluir?')){db.estoque.splice(${idx},1);save();}">DEL</button></td></tr>`;
-                }
-            });
+            if(sEst !== "" || filter === 'all'){
+                tableEst.classList.remove('hide-table');
+                if(db.estoque) db.estoque.forEach((item, idx) => {
+                    if(filter === 'all' || item.desc.toUpperCase().includes(sEst)) {
+                        estTbody.innerHTML += `<tr><td>${item.desc}</td><td>${item.unid}</td><td>${item.ncm}</td><td>${item.cfop}</td><td>R$ ${parseFloat(item.val).toFixed(2)}</td><td>${item.qtd}</td><td class="no-print"><button class="btn btn-edit" onclick="editEstItem(${idx})">EDIT</button><button class="btn btn-del" onclick="if(confirm('Excluir?')){db.estoque.splice(${idx},1);save();}">DEL</button></td></tr>`;
+                    }
+                });
+            } else { tableEst.classList.add('hide-table'); }
         }
+
+        // --- CLIENTES ---
+        const sCli = document.getElementById('search-cli-input').value.toUpperCase();
+        const tableCli = document.getElementById('table-clientes');
         const cliTbody = document.getElementById('tbl-clientes-corpo');
         if(cliTbody) {
             cliTbody.innerHTML = '';
-            const s = document.getElementById('search-cli-input').value.toUpperCase();
-            if(db.clientes) db.clientes.forEach((c, idx) => {
-                if(filter === 'all' || c.nome.toUpperCase().includes(s)) {
-                    cliTbody.innerHTML += `<tr><td><strong>${c.nome}</strong><br><small>${c.doc}</small></td><td>${c.tel}</td><td>${c.cidade}/${c.uf}</td><td>${c.ultima_compra || '---'}</td><td class="no-print"><button class="btn btn-edit" onclick="editCliente(${idx})">EDIT</button></td></tr>`;
-                }
-            });
+            if(sCli !== "" || filter === 'all'){
+                tableCli.classList.remove('hide-table');
+                if(db.clientes) db.clientes.forEach((c, idx) => {
+                    if(filter === 'all' || c.nome.toUpperCase().includes(sCli)) {
+                        cliTbody.innerHTML += `<tr><td><strong>${c.nome}</strong><br><small>${c.doc}</small></td><td>${c.tel}</td><td>${c.cidade}/${c.uf}</td><td>${c.ultima_compra || '---'}</td><td class="no-print"><button class="btn btn-edit" onclick="editCliente(${idx})">EDIT</button></td></tr>`;
+                    }
+                });
+            } else { tableCli.classList.add('hide-table'); }
         }
+
+        // --- ORÇAMENTO ---
         const orcCliSel = document.getElementById('orc-cli-sel');
         if(orcCliSel && db.clientes) {
             const current = orcCliSel.value;
@@ -589,23 +612,35 @@
             db.clientes.forEach(c => { orcCliSel.innerHTML += `<option value="${c.nome}" ${current === c.nome ? 'selected' : ''}>${c.nome}</option>`; });
         }
         const orcTbody = document.getElementById('orc-lista-corpo');
+        const orcArea = document.getElementById('orc-area');
         if(orcTbody) {
             orcTbody.innerHTML = '';
-            if(db.orc_temp) db.orc_temp.forEach((it, idx) => {
-                orcTbody.innerHTML += `<tr><td>${it.qtd}</td><td>${it.desc}</td><td>R$ ${parseFloat(it.val).toFixed(2)}</td><td>R$ ${(it.val * it.qtd).toFixed(2)}</td><td class="no-print"><button class="btn btn-del" onclick="db.orc_temp.splice(${idx},1);save();">X</button></td></tr>`;
-            });
+            if(db.orc_temp && db.orc_temp.length > 0) {
+                orcArea.classList.remove('hide-table');
+                db.orc_temp.forEach((it, idx) => {
+                    orcTbody.innerHTML += `<tr><td>${it.qtd}</td><td>${it.desc}</td><td>R$ ${parseFloat(it.val).toFixed(2)}</td><td>R$ ${(it.val * it.qtd).toFixed(2)}</td><td class="no-print"><button class="btn btn-del" onclick="db.orc_temp.splice(${idx},1);save();">X</button></td></tr>`;
+                });
+            } else { orcArea.classList.add('hide-table'); }
             calculateTotal();
         }
+
+        // --- HISTÓRICO ---
+        const sHist = document.getElementById('search-hist').value.toUpperCase();
+        const tableHist = document.getElementById('table-historico');
         const histTbody = document.getElementById('tbl-historico-corpo');
         if(histTbody) {
             histTbody.innerHTML = '';
-            const s = document.getElementById('search-hist').value.toUpperCase();
-            if(db.historico) db.historico.slice().reverse().forEach((h) => {
-                if(h.cliente.toUpperCase().includes(s)) {
-                    histTbody.innerHTML += `<tr><td>${h.data}</td><td>${h.cliente}</td><td>R$ ${parseFloat(h.total).toFixed(2)}</td><td><select onchange="updateStatus(${h.id}, this.value)"><option ${h.status==='Pendente'?'selected':''}>Pendente</option><option ${h.status==='Aprovado'?'selected':''}>Aprovado</option><option ${h.status==='Cancelado'?'selected':''}>Cancelado</option></select></td><td class="no-print"><button class="btn btn-edit" onclick="editOrcHist(${h.id})">EDITAR</button><button class="btn btn-del" onclick="if(confirm('Excluir?')){db.historico.splice(db.historico.findIndex(x=>x.id===${h.id}),1);save();}">DEL</button></td></tr>`;
-                }
-            });
+            if(sHist !== ""){
+                tableHist.classList.remove('hide-table');
+                if(db.historico) db.historico.slice().reverse().forEach((h) => {
+                    if(h.cliente.toUpperCase().includes(sHist)) {
+                        histTbody.innerHTML += `<tr><td>${h.data}</td><td>${h.cliente}</td><td>R$ ${parseFloat(h.total).toFixed(2)}</td><td><select onchange="updateStatus(${h.id}, this.value)"><option ${h.status==='Pendente'?'selected':''}>Pendente</option><option ${h.status==='Aprovado'?'selected':''}>Aprovado</option><option ${h.status==='Cancelado'?'selected':''}>Cancelado</option></select></td><td class="no-print"><button class="btn btn-edit" onclick="editOrcHist(${h.id})">EDITAR</button><button class="btn btn-del" onclick="if(confirm('Excluir?')){db.historico.splice(db.historico.findIndex(x=>x.id===${h.id}),1);save();}">DEL</button></td></tr>`;
+                    }
+                });
+            } else { tableHist.classList.add('hide-table'); }
         }
+
+        // --- MOVIMENTAÇÃO (Sempre visível nesta aba) ---
         const logTbody = document.getElementById('tbl-log-corpo');
         if(logTbody) {
             logTbody.innerHTML = '';
@@ -613,6 +648,8 @@
                 logTbody.innerHTML += `<tr><td>${m.data}</td><td>${m.produto}</td><td>${m.qtd}</td><td>${m.destino}</td></tr>`;
             });
         }
+        
+        // --- USUÁRIOS ---
         const userTbody = document.getElementById('tbl-users-corpo');
         if(userTbody) {
             userTbody.innerHTML = '';
