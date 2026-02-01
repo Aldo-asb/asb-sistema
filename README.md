@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#1a1a1a">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Gestão ASB ENG - v81.0</title>
+    <title>Gestão ASB ENG - v100.0</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
@@ -60,8 +60,10 @@
         input, select { padding: 12px; border: 1px solid #ccc; border-radius: 6px; width: 100%; box-sizing: border-box; font-size: 14px; }
         
         table { width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 15px; border: 1px solid #eee; border-radius: 8px; overflow: hidden; }
-        th { background: #fdfdfd; padding: 15px; text-align: left; border-bottom: 2px solid #eee; font-size: 11px; color: #888; text-transform: uppercase; }
-        td { padding: 14px 15px; border-bottom: 1px solid #f6f6f6; font-size: 14px; }
+        th { background: #fdfdfd; padding: 8px 15px; text-align: left; border-bottom: 2px solid #eee; font-size: 11px; color: #888; text-transform: uppercase; }
+        
+        /* CORREÇÃO PONTO 1: Espaçamento reduzido nas linhas das tabelas */
+        td { padding: 4px 15px; border-bottom: 1px solid #f6f6f6; font-size: 13px; line-height: 1.2; }
         
         .btn { padding: 10px 20px; border: none; border-radius: 6px; color: white; cursor: pointer; font-weight: bold; text-transform: uppercase; transition: 0.3s; height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 11px; }
         .btn-add { background: var(--asb-success-grad); }
@@ -73,8 +75,8 @@
         .edit-only { display: none; }
         .edit-highlight { background: #fff9c4 !important; border: 2px solid #fbc02d !important; }
 
-        .summary-box { background: #f8f9fa; padding: 25px; margin-top: 20px; border-radius: 10px; border: 1px solid #eee; }
-        .summary-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; font-size: 14px; }
+        .summary-box { background: #f8f9fa; padding: 15px; margin-top: 15px; border-radius: 10px; border: 1px solid #eee; }
+        .summary-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #eee; font-size: 14px; }
 
         .temp-refresh-btn { background: var(--asb-success); color: white; border: none; border-radius: 4px; padding: 5px 10px; cursor: pointer; font-size: 10px; margin-left: 10px; }
 
@@ -87,6 +89,7 @@
             table th:last-child, table td:last-child { display: none !important; }
             #tab-orcamento.active #orc-area { display: block !important; }
             .summary-box { border: 1px solid #333; }
+            td { padding: 2px 10px !important; font-size: 11px !important; }
         }
     </style>
 </head>
@@ -216,7 +219,7 @@
                 </div>
                 <div class="no-print">
                     <button class="btn btn-print" onclick="window.print()">🖨️ GERAR PDF / IMPRIMIR</button>
-                    <button class="btn btn-add" style="width:100%; margin-top:10px; height:50px;" onclick="finalizarERegistrar()">✅ FINALIZAR E SALVAR</button>
+                    <button class="btn btn-add" style="width:100%; margin-top:10px; height:50px;" id="btn-finalizar-orc" onclick="finalizarERegistrar()">✅ FINALIZAR E SALVAR</button>
                 </div>
             </div>
         </section>
@@ -224,7 +227,7 @@
         <section id="tab-relatorios" class="section-panel">
             <div class="search-hero"><input type="text" id="search-hist" placeholder="🔍 Filtrar histórico por cliente..." onkeyup="render()"></div>
             <table>
-                <thead><tr><th>Data</th><th>Cliente</th><th>Valor</th><th>Status</th><th>Ações</th></tr></thead>
+                <thead><tr><th>Data</th><th>Cliente</th><th>Valor</th><th>Status</th><th class="no-print">Ações</th></tr></thead>
                 <tbody id="tbl-historico-corpo"></tbody>
             </table>
         </section>
@@ -265,7 +268,6 @@
 </div>
 
 <script>
-    // CONFIGURAÇÃO FIREBASE - v81.0
     const firebaseConfig = {
         apiKey: "AIzaSyA8rHSh4HW_bSVzccYPb49aQJ5QlvakAKo",
         authDomain: "asb-sistema.firebaseapp.com",
@@ -278,16 +280,14 @@
 
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
-    
-    // NÓ DE DADOS REALTIME
     const DB_PATH = 'asb_cloud_master_v81';
     let db = { users:[{user:'admin', pass:'asb123', level:'master'}], estoque:[], clientes:[], orc_temp:[], historico:[], movimentacoes:[] };
     
     let editingEstoqueIndex = null;
     let editingClienteIndex = null;
+    // CORREÇÃO PONTO 2: Variável para id de edição
+    let currentEditingOrcId = null;
 
-    // --- FUNÇÃO DE SINCRONISMO REALTIME ---
-    // Esta é a alma da nuvem: .on('value') faz o navegador "ouvir" a nuvem
     function initCloud() {
         database.ref(DB_PATH).on('value', (snapshot) => {
             const val = snapshot.val();
@@ -296,27 +296,22 @@
                 if(!db.users) db.users = [{user:'admin', pass:'asb123', level:'master'}];
                 document.getElementById('sync-indicator').innerText = "Nuvem Ativa";
                 document.getElementById('sync-indicator').className = 'sync-badge sync-online';
-                render(); // Atualiza a tela de todos que estão com o sistema aberto
+                render();
             } else {
-                save(); // Cria o banco se estiver vazio
+                save();
             }
         });
     }
 
-    // Inicia a escuta da nuvem antes de qualquer coisa
     initCloud();
 
     function save() {
-        // Envia o estado atual do 'db' para o Firebase
         database.ref(DB_PATH).set(db).catch(e => console.error("Erro ao salvar nuvem", e));
     }
 
-    // --- LOGIN ---
     function handleLogin() {
         const u = document.getElementById('user-input').value.toLowerCase().trim();
         const p = document.getElementById('pass-input').value.trim();
-        
-        // No login, verificamos os usuários que vieram da nuvem (db.users)
         const found = db.users.find(x => x.user.toLowerCase() === u && x.pass === p);
         if((u === 'admin' && p === 'asb123') || found) {
             document.getElementById('login-screen').style.display = 'none';
@@ -330,7 +325,6 @@
         }
     }
 
-    // --- NAVEGAÇÃO ---
     function openTab(id, btn) {
         document.querySelectorAll('.section-panel').forEach(s => s.classList.remove('active'));
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -339,7 +333,6 @@
         render();
     }
 
-    // --- ESTOQUE ---
     function mostrarFormEstoque() { document.getElementById('form-estoque').style.display = 'grid'; }
     function addEstoque() {
         const item = {
@@ -359,7 +352,7 @@
         if(!db.estoque) db.estoque = [];
         if(editingEstoqueIndex !== null) db.estoque[editingEstoqueIndex] = item;
         else db.estoque.push(item);
-        cancelarEdicao(); save(); // 'save' dispara a atualização em todos os dispositivos
+        cancelarEdicao(); save();
     }
 
     function editEstItem(idx) {
@@ -395,7 +388,6 @@
         document.getElementById('est-val').value = (comp + (comp * (mark/100))).toFixed(2);
     }
 
-    // --- CLIENTES ---
     function mostrarFormCliente() { document.getElementById('form-cliente').style.display = 'grid'; }
     function addCliente() {
         const c = {
@@ -439,7 +431,6 @@
         ['cli-nome','cli-razao','cli-doc','cli-tel','cli-email','cli-end','cli-cidade'].forEach(id => document.getElementById(id).value = '');
     }
 
-    // --- ORÇAMENTO ---
     function filterItems() {
         const term = document.getElementById('orc-search').value.toUpperCase();
         const sel = document.getElementById('orc-item-sel');
@@ -465,8 +456,10 @@
     function novoOrcamento() {
         if(confirm("Limpar orçamento atual?")) {
             db.orc_temp = [];
+            currentEditingOrcId = null;
             document.getElementById('orc-cli-sel').value = "";
             ['orc-perc-acess','orc-mo-fixo','orc-perc-mo'].forEach(id => document.getElementById(id).value = '');
+            document.getElementById('btn-finalizar-orc').innerText = "✅ FINALIZAR E SALVAR";
             save();
         }
     }
@@ -474,8 +467,11 @@
     function calculateTotal() {
         let mat = 0;
         if(db.orc_temp) db.orc_temp.forEach(o => mat += (o.val * o.qtd));
-        const acess = mat * ((parseFloat(document.getElementById('orc-perc-acess').value) || 0)/100);
-        const mo = (parseFloat(document.getElementById('orc-mo-fixo').value) || 0) + (mat * ((parseFloat(document.getElementById('orc-perc-mo').value) || 0)/100));
+        const pA = parseFloat(document.getElementById('orc-perc-acess').value) || 0;
+        const mF = parseFloat(document.getElementById('orc-mo-fixo').value) || 0;
+        const pM = parseFloat(document.getElementById('orc-perc-mo').value) || 0;
+        const acess = mat * (pA/100);
+        const mo = mF + (mat * (pM/100));
         const total = mat + acess + mo;
         document.getElementById('res-materiais').innerText = `R$ ${mat.toFixed(2)}`;
         document.getElementById('res-acessorios').innerText = `R$ ${acess.toFixed(2)}`;
@@ -486,27 +482,58 @@
         return total;
     }
 
+    // CORREÇÃO PONTO 2 & 3: Finalizar Orçamento com Edição e Registro de Movimentação
     function finalizarERegistrar() {
         const cli = document.getElementById('orc-cli-sel').value;
         if(!cli || !db.orc_temp || db.orc_temp.length === 0) return alert("Selecione cliente e adicione itens!");
         if(!db.historico) db.historico = [];
-        db.historico.push({ id: Date.now(), data: new Date().toLocaleString(), cliente: cli, total: calculateTotal(), status: 'Pendente', itens: [...db.orc_temp] });
+        
+        const orcData = { 
+            id: currentEditingOrcId || Date.now(), 
+            data: new Date().toLocaleString(), 
+            cliente: cli, 
+            total: calculateTotal(), 
+            status: 'Pendente', 
+            itens: [...db.orc_temp],
+            perc_acess: document.getElementById('orc-perc-acess').value,
+            mo_fixo: document.getElementById('orc-mo-fixo').value,
+            perc_mo: document.getElementById('orc-perc-mo').value
+        };
+
+        if(currentEditingOrcId) {
+            const idx = db.historico.findIndex(x => x.id === currentEditingOrcId);
+            db.historico[idx] = orcData;
+        } else {
+            db.historico.push(orcData);
+        }
+
         const cObj = db.clientes.find(c => c.nome === cli);
         if(cObj) cObj.ultima_compra = new Date().toLocaleString();
-        db.orc_temp = []; save(); alert("Orçamento registrado!");
+        
+        db.orc_temp = [];
+        currentEditingOrcId = null;
+        document.getElementById('btn-finalizar-orc').innerText = "✅ FINALIZAR E SALVAR";
+        save(); 
+        alert("Orçamento registrado!");
     }
 
     function updateStatus(id, newStatus) {
         const h = db.historico.find(x => x.id === id);
         if(h && h.status !== newStatus) {
             if(newStatus === 'Aprovado') {
-                if(confirm("Confirmar aprovação? Isso reduzirá o estoque.")) {
+                if(confirm("Confirmar aprovação? Isso reduzirá o estoque e registrará a saída.")) {
                     h.itens.forEach(it => {
                         const p = db.estoque.find(e => e.desc === it.desc);
                         if(p) { 
                             p.qtd -= it.qtd; 
                             if(!db.movimentacoes) db.movimentacoes = [];
-                            db.movimentacoes.push({data: new Date().toLocaleString(), produto: it.desc, qtd: it.qtd, destino: h.cliente}); 
+                            // CORREÇÃO PONTO 3: Registro automático na aba Movimentação
+                            db.movimentacoes.push({
+                                data: new Date().toLocaleString(), 
+                                produto: it.desc, 
+                                qtd: it.qtd, 
+                                destino: h.cliente
+                            }); 
                         }
                     });
                     h.status = 'Aprovado';
@@ -516,7 +543,22 @@
         }
     }
 
-    // --- MASTER ---
+    // CORREÇÃO PONTO 2: Função para Editar do Histórico
+    function editOrcHist(id) {
+        const h = db.historico.find(x => x.id === id);
+        if(h) {
+            db.orc_temp = [...h.itens];
+            currentEditingOrcId = h.id;
+            openTab('tab-orcamento', document.querySelectorAll('.nav-btn')[2]);
+            document.getElementById('orc-cli-sel').value = h.cliente;
+            document.getElementById('orc-perc-acess').value = h.perc_acess || 0;
+            document.getElementById('orc-mo-fixo').value = h.mo_fixo || 0;
+            document.getElementById('orc-perc-mo').value = h.perc_mo || 0;
+            document.getElementById('btn-finalizar-orc').innerText = "💾 ATUALIZAR ORÇAMENTO";
+            render();
+        }
+    }
+
     function addNewUser() {
         const u = document.getElementById('new-user').value.trim();
         const p = document.getElementById('new-pass').value.trim();
@@ -529,7 +571,6 @@
         }
     }
 
-    // --- OUTROS ---
     function refreshTemperature() {
         const t = (Math.random() * (26 - 19) + 19).toFixed(1);
         document.getElementById('temp-val').innerText = t + "°C";
@@ -538,9 +579,7 @@
     function exportDB() {
         const blob = new Blob([JSON.stringify(db)], {type: 'application/json'});
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url;
-        a.download = `ASB_BACKUP_v81.json`;
-        a.click();
+        const a = document.createElement('a'); a.href = url; a.download = `ASB_BACKUP_v100.json`; a.click();
     }
 
     function importDB(input) {
@@ -548,26 +587,18 @@
         reader.onload = function() {
             try {
                 const imported = JSON.parse(reader.result);
-                if(confirm("Substituir dados atuais?")) {
-                    db = imported; save(); alert("Importação completa!");
-                }
+                if(confirm("Substituir dados atuais?")) { db = imported; save(); alert("Importação completa!"); }
             } catch(e) { alert("JSON Inválido."); }
         };
         reader.readAsText(input.files[0]);
     }
 
     function limparHistoricoGeral() {
-        if(confirm("Deseja apagar histórico e logs?")) {
-            db.historico = []; db.movimentacoes = []; save();
-        }
+        if(confirm("Deseja apagar histórico e logs?")) { db.historico = []; db.movimentacoes = []; save(); }
     }
 
-    function forceRealtimeSync() {
-        initCloud();
-        alert("Canal Cloud Reiniciado.");
-    }
+    function forceRealtimeSync() { initCloud(); alert("Canal Cloud Reiniciado."); }
 
-    // --- RENDERIZAÇÃO CENTRALIZADA (Chamada toda vez que a nuvem muda) ---
     function render(filter) {
         if(!db) return;
 
@@ -600,9 +631,7 @@
         if(orcCliSel && db.clientes) {
             const current = orcCliSel.value;
             orcCliSel.innerHTML = '<option value="">Selecionar Cliente</option>';
-            db.clientes.forEach(c => {
-                orcCliSel.innerHTML += `<option value="${c.nome}" ${current === c.nome ? 'selected' : ''}>${c.nome}</option>`;
-            });
+            db.clientes.forEach(c => { orcCliSel.innerHTML += `<option value="${c.nome}" ${current === c.nome ? 'selected' : ''}>${c.nome}</option>`; });
         }
 
         // Lista do Orçamento Atual
@@ -622,7 +651,22 @@
             const s = document.getElementById('search-hist').value.toUpperCase();
             if(db.historico) db.historico.slice().reverse().forEach((h) => {
                 if(h.cliente.toUpperCase().includes(s)) {
-                    histTbody.innerHTML += `<tr><td>${h.data}</td><td>${h.cliente}</td><td>R$ ${parseFloat(h.total).toFixed(2)}</td><td><select onchange="updateStatus(${h.id}, this.value)" style="width:auto; padding:5px;"><option ${h.status==='Pendente'?'selected':''}>Pendente</option><option ${h.status==='Aprovado'?'selected':''}>Aprovado</option><option ${h.status==='Cancelado'?'selected':''}>Cancelado</option></select></td><td><button class="btn btn-new" onclick="alert('Relatório Detalhado em Breve')">VER</button></td></tr>`;
+                    histTbody.innerHTML += `<tr>
+                        <td>${h.data}</td>
+                        <td>${h.cliente}</td>
+                        <td>R$ ${parseFloat(h.total).toFixed(2)}</td>
+                        <td>
+                            <select onchange="updateStatus(${h.id}, this.value)" style="width:auto; padding:5px;">
+                                <option ${h.status==='Pendente'?'selected':''}>Pendente</option>
+                                <option ${h.status==='Aprovado'?'selected':''}>Aprovado</option>
+                                <option ${h.status==='Cancelado'?'selected':''}>Cancelado</option>
+                            </select>
+                        </td>
+                        <td class="no-print">
+                            <button class="btn btn-edit" onclick="editOrcHist(${h.id})">EDITAR</button>
+                            <button class="btn btn-del" onclick="if(confirm('Excluir este orçamento definitivamente?')){db.historico.splice(db.historico.findIndex(x=>x.id===${h.id}),1);save();}">EXCLUIR</button>
+                        </td>
+                    </tr>`;
                 }
             });
         }
@@ -645,7 +689,6 @@
             });
         }
     }
-
 </script>
 </body>
 </html>
