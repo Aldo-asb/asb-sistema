@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#1a1a1a">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Gestão ASB ENG - v114.0</title>
+    <title>Gestão ASB ENG - v127.0</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
@@ -72,13 +72,12 @@
 
         .hide-table { display: none; }
 
-        /* --- ESTILOS DO AGENTE IA --- */
-        #chat-container { height: 400px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 15px; background: #f9f9f9; display: flex; flex-direction: column; gap: 10px; }
-        .msg { max-width: 80%; padding: 10px 15px; border-radius: 15px; font-size: 14px; line-height: 1.4; }
-        .msg-user { align-self: flex-end; background: var(--asb-blue); color: white; border-bottom-right-radius: 2px; }
-        .msg-ai { align-self: flex-start; background: #e2e2e2; color: #333; border-bottom-left-radius: 2px; border-left: 4px solid var(--asb-blue); }
+        /* --- MÓDULO IA CONSULTOR CSS (ALOCADO) --- */
+        #chat-container { height: 380px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 15px; background: #fdfdfd; display: flex; flex-direction: column; gap: 10px; }
+        .msg { max-width: 85%; padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.4; }
+        .msg-user { align-self: flex-end; background: var(--asb-blue-grad); color: white; border-bottom-right-radius: 2px; }
+        .msg-ai { align-self: flex-start; background: #eee; border: 1px solid #ddd; border-left: 4px solid var(--asb-blue); color: #333; border-bottom-left-radius: 2px; }
         .chat-input-area { display: flex; gap: 10px; margin-top: 15px; }
-        .btn-voice { background: #f44336; border-radius: 50%; width: 45px; height: 45px; }
 
         @media print {
             body { background: white !important; }
@@ -134,17 +133,14 @@
         </nav>
 
         <section id="tab-ia" class="section-panel">
-            <h3 style="margin-top:0;">🤖 Agente de Engenharia e Automação ASB</h3>
-            <p style="font-size: 12px; color: #666;">Peça dimensionamentos, ajuda com códigos ESP32 ou análise de dados.</p>
-            
+            <h3 style="margin-top:0;">🤖 Agente Especialista ASB</h3>
             <div id="chat-container">
-                <div class="msg msg-ai">Olá! Eu sou o assistente técnico da ASB. Como posso ajudar você com cálculos de engenharia ou programação hoje?</div>
+                <div class="msg msg-ai">Olá! Sou o especialista da ASB. Posso consultar seu estoque, preços ou fazer dimensionamentos elétricos por voz. O que deseja saber agora?</div>
             </div>
-            
             <div class="chat-input-area no-print">
-                <input type="text" id="chat-input" placeholder="Digite sua dúvida técnica ou peça um cálculo..." onkeypress="if(event.key==='Enter') sendChat()">
-                <button class="btn btn-voice" onclick="startVoiceRecognition()" title="Falar por áudio">🎤</button>
-                <button class="btn btn-add" onclick="sendChat()">ENVIAR</button>
+                <input type="text" id="chat-input" placeholder="Pergunte sobre produtos ou cálculos..." onkeypress="if(event.key==='Enter') sendChat()">
+                <button class="btn btn-del" style="border-radius: 50%; width: 45px; height: 45px; background: #f44336;" onclick="startVoiceRecognition()">🎤</button>
+                <button class="btn btn-add" style="height:45px;" onclick="sendChat()">ENVIAR</button>
             </div>
         </section>
 
@@ -229,10 +225,10 @@
                     <tbody id="orc-lista-corpo"></tbody>
                 </table>
                 <div class="summary-box">
-                    <div class="summary-row"><span>Materiais:</span><strong id="res-materiais">R$ 0.00</strong></div>
-                    <div class="summary-row"><span>Acessórios:</span><strong id="res-acessorios">R$ 0.00</strong></div>
-                    <div class="summary-row"><span>Mão de Obra:</span><strong id="res-mo">R$ 0.00</strong></div>
-                    <div class="summary-row" style="font-size:20px; border-top:2px solid #333; padding-top:15px; color:var(--asb-blue);"><span>TOTAL FINAL:</span><span id="res-total-final" style="font-weight:900;">R$ 0.00</span></div>
+                    <div class="summary-row" style="display:flex; justify-content:space-between"><span>Materiais:</span><strong id="res-materiais">R$ 0.00</strong></div>
+                    <div class="summary-row" style="display:flex; justify-content:space-between"><span>Acessórios:</span><strong id="res-acessorios">R$ 0.00</strong></div>
+                    <div class="summary-row" style="display:flex; justify-content:space-between"><span>Mão de Obra:</span><strong id="res-mo">R$ 0.00</strong></div>
+                    <div class="summary-row" style="display:flex; justify-content:space-between; font-size:20px; border-top:2px solid #333; padding-top:15px; color:var(--asb-blue);"><span>TOTAL FINAL:</span><span id="res-total-final" style="font-weight:900;">R$ 0.00</span></div>
                 </div>
                 <div class="no-print">
                     <button class="btn btn-print" onclick="window.print()">🖨️ GERAR PDF / IMPRIMIR</button>
@@ -338,59 +334,10 @@
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
         document.getElementById(id).classList.add('active');
         btn.classList.add('active');
+        document.getElementById('search-est-input').value = "";
+        document.getElementById('search-cli-input').value = "";
+        document.getElementById('search-hist').value = "";
         render();
-    }
-
-    // LÓGICA DO AGENTE IA (ADICIONADA)
-    function addChatMessage(role, text) {
-        const container = document.getElementById('chat-container');
-        const div = document.createElement('div');
-        div.className = `msg msg-${role}`;
-        div.innerText = text;
-        container.appendChild(div);
-        container.scrollTop = container.scrollHeight;
-    }
-
-    async function sendChat() {
-        const input = document.getElementById('chat-input');
-        const text = input.value.trim();
-        if(!text) return;
-
-        addChatMessage('user', text);
-        input.value = '';
-
-        // "Cérebro" de Respostas Técnicas (Lógica Inicial)
-        let response = "Estou analisando seu pedido...";
-        const t = text.toLowerCase();
-
-        if(t.includes("capacitor") || t.includes("fator de potência")) {
-            response = "Para dimensionar o banco de capacitores, preciso da Potência (kW), cosseno atual e o cosseno desejado. Ex: 'Calcular para 50kW, 0.80 para 0.95'.";
-        } else if (t.includes("motor") && t.includes("disjuntor")) {
-            response = "Um motor trifásico de 10CV em 220V consome aprox. 28A. Recomendo disjuntor motor de 25-32A com ajuste em 28A.";
-        } else if (t.includes("esp32") || t.includes("código")) {
-            response = "Para o ESP32, recomendo usar a biblioteca WiFi.h e manter o loop principal limpo. Deseja um exemplo de conexão Firebase?";
-        } else {
-            response = "Entendido. Como assistente da ASB Automação, posso ajudar com cálculos de carga, dimensionamento de cabos (NBR 5410) ou revisão de scripts Python/C++. O que deseja detalhar?";
-        }
-
-        setTimeout(() => addChatMessage('ai', response), 800);
-    }
-
-    function startVoiceRecognition() {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) return alert("Seu navegador não suporta reconhecimento de voz.");
-        
-        const rec = new SpeechRecognition();
-        rec.lang = 'pt-BR';
-        rec.start();
-        
-        addChatMessage('ai', "Ouvindo...");
-        
-        rec.onresult = (e) => {
-            const transcript = e.results[0][0].transcript;
-            document.getElementById('chat-input').value = transcript;
-            sendChat();
-        };
     }
 
     function calcVenda() {
@@ -422,7 +369,9 @@
         if(!item.desc) return;
         if(editingEstoqueIndex !== null) db.estoque[editingEstoqueIndex] = item;
         else db.estoque.push(item);
-        cancelarEdicao(); save(); render();
+        cancelarEdicao(); 
+        document.getElementById('search-est-input').value = "";
+        save();
     }
 
     function editEstItem(idx) {
@@ -463,7 +412,9 @@
         if(!c.nome) return;
         if(editingClienteIndex !== null) db.clientes[editingClienteIndex] = c;
         else db.clientes.push(c);
-        cancelarEdicaoCliente(); save(); render();
+        cancelarEdicaoCliente(); 
+        document.getElementById('search-cli-input').value = "";
+        save();
     }
 
     function editCliente(idx) {
@@ -503,7 +454,16 @@
         if(prod) { 
             if(!db.orc_temp) db.orc_temp = [];
             db.orc_temp.push({id: Date.now(), desc: prod.desc, val: prod.val, qtd: qtd}); 
-            save(); render();
+            save(); 
+        }
+    }
+
+    function novoOrcamento() {
+        if(confirm("Limpar orçamento atual?")) {
+            db.orc_temp = []; currentEditingOrcId = null;
+            document.getElementById('orc-cli-sel').value = "";
+            ['orc-perc-acess','orc-mo-fixo','orc-perc-mo'].forEach(id => document.getElementById(id).value = '');
+            save();
         }
     }
 
@@ -543,22 +503,26 @@
             db.historico[idx] = orcData;
         } else { db.historico.push(orcData); }
         db.orc_temp = []; currentEditingOrcId = null;
-        save(); alert("Orçamento registrado!"); render();
+        save(); alert("Orçamento registrado!");
     }
 
     function updateStatus(id, newStatus) {
         const h = db.historico.find(x => x.id === id);
         if(h && h.status !== newStatus) {
             if(newStatus === 'Aprovado') {
-                if(confirm("Confirmar aprovação? Isso reduzirá o estoque.")) {
+                if(confirm("Confirmar aprovação? Isso reduzirá o estoque e registrará a saída.")) {
                     h.itens.forEach(it => {
                         const p = db.estoque.find(e => e.desc === it.desc);
-                        if(p) { p.qtd -= it.qtd; if(!db.movimentacoes) db.movimentacoes = []; db.movimentacoes.push({data: new Date().toLocaleString(), produto: it.desc, qtd: it.qtd, destino: h.cliente}); }
+                        if(p) { 
+                            p.qtd -= it.qtd; 
+                            if(!db.movimentacoes) db.movimentacoes = [];
+                            db.movimentacoes.push({data: new Date().toLocaleString(), produto: it.desc, qtd: it.qtd, destino: h.cliente}); 
+                        }
                     });
                     h.status = 'Aprovado';
                 } else { render(); return; }
             } else { h.status = newStatus; }
-            save(); render();
+            save();
         }
     }
 
@@ -576,86 +540,18 @@
         }
     }
 
+    function addNewUser() {
+        const u = document.getElementById('new-user').value.trim();
+        const p = document.getElementById('new-pass').value.trim();
+        if(u && p) {
+            if(!db.users) db.users = [];
+            db.users.push({user: u, pass: p, level: 'comum'}); save();
+        }
+    }
+
     function refreshTemperature() {
         const t = (Math.random() * (26 - 19) + 19).toFixed(1);
         document.getElementById('temp-val').innerText = t + "°C";
-    }
-
-    function render(filter) {
-        if(!db) return;
-
-        // ESTOQUE
-        const sEst = document.getElementById('search-est-input').value.toUpperCase();
-        const estTbody = document.getElementById('tbl-estoque-corpo');
-        if(estTbody) {
-            estTbody.innerHTML = '';
-            if(sEst !== "" || filter === 'all'){
-                document.getElementById('table-estoque').classList.remove('hide-table');
-                db.estoque.forEach((item, idx) => {
-                    if(filter === 'all' || item.desc.toUpperCase().includes(sEst)) {
-                        estTbody.innerHTML += `<tr><td>${item.desc}</td><td>${item.unid}</td><td>${item.ncm}</td><td>${item.cfop || ""}</td><td>${item.cst || ""}</td><td>R$ ${parseFloat(item.val).toFixed(2)}</td><td>${item.qtd}</td><td class="no-print"><button class="btn btn-edit" onclick="editEstItem(${idx})">EDIT</button><button class="btn btn-del" onclick="if(confirm('Excluir?')){db.estoque.splice(${idx},1);save();render();}">DEL</button></td></tr>`;
-                    }
-                });
-            } else { document.getElementById('table-estoque').classList.add('hide-table'); }
-        }
-
-        // CLIENTES
-        const sCli = document.getElementById('search-cli-input').value.toUpperCase();
-        const cliTbody = document.getElementById('tbl-clientes-corpo');
-        if(cliTbody) {
-            cliTbody.innerHTML = '';
-            if(sCli !== "" || filter === 'all'){
-                document.getElementById('table-clientes').classList.remove('hide-table');
-                db.clientes.forEach((c, idx) => {
-                    if(filter === 'all' || c.nome.toUpperCase().includes(sCli)) {
-                        cliTbody.innerHTML += `<tr><td><strong>${c.nome}</strong><br><small>${c.doc}</small></td><td>${c.tel}</td><td>${c.cidade}/${c.uf}</td><td>${c.ultima_compra || '---'}</td><td class="no-print"><button class="btn btn-edit" onclick="editCliente(${idx})">EDIT</button></td></tr>`;
-                    }
-                });
-            } else { document.getElementById('table-clientes').classList.add('hide-table'); }
-        }
-
-        // ORÇAMENTO
-        const orcCliSel = document.getElementById('orc-cli-sel');
-        if(orcCliSel) {
-            const current = orcCliSel.value;
-            orcCliSel.innerHTML = '<option value="">Selecionar Cliente</option>';
-            db.clientes.forEach(c => { orcCliSel.innerHTML += `<option value="${c.nome}" ${current === c.nome ? 'selected' : ''}>${c.nome}</option>`; });
-        }
-        const orcTbody = document.getElementById('orc-lista-corpo');
-        if(orcTbody) {
-            orcTbody.innerHTML = '';
-            if(db.orc_temp && db.orc_temp.length > 0) {
-                document.getElementById('orc-area').classList.remove('hide-table');
-                db.orc_temp.forEach((it, idx) => {
-                    orcTbody.innerHTML += `<tr><td>${it.qtd}</td><td>${it.desc}</td><td>R$ ${parseFloat(it.val).toFixed(2)}</td><td>R$ ${(it.val * it.qtd).toFixed(2)}</td><td class="no-print"><button class="btn btn-del" onclick="db.orc_temp.splice(${idx},1);save();render();">X</button></td></tr>`;
-                });
-            } else { document.getElementById('orc-area').classList.add('hide-table'); }
-            calculateTotal();
-        }
-
-        // HISTÓRICO
-        const sHist = document.getElementById('search-hist').value.toUpperCase();
-        const histTbody = document.getElementById('tbl-historico-corpo');
-        if(histTbody) {
-            histTbody.innerHTML = '';
-            if(sHist !== ""){
-                document.getElementById('table-historico').classList.remove('hide-table');
-                db.historico.slice().reverse().forEach((h) => {
-                    if(h.cliente.toUpperCase().includes(sHist)) {
-                        histTbody.innerHTML += `<tr><td>${h.data}</td><td>${h.cliente}</td><td>R$ ${parseFloat(h.total).toFixed(2)}</td><td><select onchange="updateStatus(${h.id}, this.value)"><option ${h.status==='Pendente'?'selected':''}>Pendente</option><option ${h.status==='Aprovado'?'selected':''}>Aprovado</option><option ${h.status==='Cancelado'?'selected':''}>Cancelado</option></select></td><td class="no-print"><button class="btn btn-edit" onclick="editOrcHist(${h.id})">EDITAR</button></td></tr>`;
-                    }
-                });
-            } else { document.getElementById('table-historico').classList.add('hide-table'); }
-        }
-
-        // MOVIMENTAÇÃO
-        const logTbody = document.getElementById('tbl-log-corpo');
-        if(logTbody) {
-            logTbody.innerHTML = '';
-            if(db.movimentacoes) db.movimentacoes.slice().reverse().forEach(m => {
-                logTbody.innerHTML += `<tr><td>${m.data}</td><td>${m.produto}</td><td>${m.qtd}</td><td>${m.destino}</td></tr>`;
-            });
-        }
     }
 
     function exportDB() {
@@ -664,8 +560,154 @@
         const a = document.createElement('a'); a.href = url; a.download = `ASB_BACKUP.json`; a.click();
     }
 
-    function forceRealtimeSync() { initCloud(); alert("Reiniciado!"); }
-</script>
+    function importDB(input) {
+        const reader = new FileReader();
+        reader.onload = function() {
+            db = JSON.parse(reader.result); save(); alert("Sucesso!");
+        };
+        reader.readAsText(input.files[0]);
+    }
 
+    function limparHistoricoGeral() {
+        if(confirm("Limpar logs?")) { db.historico = []; db.movimentacoes = []; save(); }
+    }
+
+    function forceRealtimeSync() { initCloud(); alert("Reiniciado!"); }
+
+    function render(filter) {
+        if(!db) return;
+        const sEst = document.getElementById('search-est-input').value.toUpperCase();
+        const tableEst = document.getElementById('table-estoque');
+        const estTbody = document.getElementById('tbl-estoque-corpo');
+        if(estTbody) {
+            estTbody.innerHTML = '';
+            if(sEst !== "" || filter === 'all'){
+                tableEst.classList.remove('hide-table');
+                if(db.estoque) db.estoque.forEach((item, idx) => {
+                    if(filter === 'all' || item.desc.toUpperCase().includes(sEst)) {
+                        estTbody.innerHTML += `<tr><td>${item.desc}</td><td>${item.unid}</td><td>${item.ncm}</td><td>${item.cfop || ""}</td><td>${item.cst || ""}</td><td>R$ ${parseFloat(item.val).toFixed(2)}</td><td>${item.qtd}</td><td class="no-print"><button class="btn btn-edit" onclick="editEstItem(${idx})">EDIT</button><button class="btn btn-del" onclick="if(confirm('Excluir?')){db.estoque.splice(${idx},1);save();}">DEL</button></td></tr>`;
+                    }
+                });
+            } else { tableEst.classList.add('hide-table'); }
+        }
+        const sCli = document.getElementById('search-cli-input').value.toUpperCase();
+        const tableCli = document.getElementById('table-clientes');
+        const cliTbody = document.getElementById('tbl-clientes-corpo');
+        if(cliTbody) {
+            cliTbody.innerHTML = '';
+            if(sCli !== "" || filter === 'all'){
+                tableCli.classList.remove('hide-table');
+                if(db.clientes) db.clientes.forEach((c, idx) => {
+                    if(filter === 'all' || c.nome.toUpperCase().includes(sCli)) {
+                        cliTbody.innerHTML += `<tr><td><strong>${c.nome}</strong><br><small>${c.doc}</small></td><td>${c.tel}</td><td>${c.cidade}/${c.uf}</td><td>${c.ultima_compra || '---'}</td><td class="no-print"><button class="btn btn-edit" onclick="editCliente(${idx})">EDIT</button></td></tr>`;
+                    }
+                });
+            } else { tableCli.classList.add('hide-table'); }
+        }
+        const orcCliSel = document.getElementById('orc-cli-sel');
+        if(orcCliSel && db.clientes) {
+            const current = orcCliSel.value;
+            orcCliSel.innerHTML = '<option value="">Selecionar Cliente</option>';
+            db.clientes.forEach(c => { orcCliSel.innerHTML += `<option value="${c.nome}" ${current === c.nome ? 'selected' : ''}>${c.nome}</option>`; });
+        }
+        const orcTbody = document.getElementById('orc-lista-corpo');
+        const orcArea = document.getElementById('orc-area');
+        if(orcTbody) {
+            orcTbody.innerHTML = '';
+            if(db.orc_temp && db.orc_temp.length > 0) {
+                orcArea.classList.remove('hide-table');
+                db.orc_temp.forEach((it, idx) => {
+                    orcTbody.innerHTML += `<tr><td>${it.qtd}</td><td>${it.desc}</td><td>R$ ${parseFloat(it.val).toFixed(2)}</td><td>R$ ${(it.val * it.qtd).toFixed(2)}</td><td class="no-print"><button class="btn btn-del" onclick="db.orc_temp.splice(${idx},1);save();">X</button></td></tr>`;
+                });
+            } else { orcArea.classList.add('hide-table'); }
+            calculateTotal();
+        }
+        const sHist = document.getElementById('search-hist').value.toUpperCase();
+        const tableHist = document.getElementById('table-historico');
+        const histTbody = document.getElementById('tbl-historico-corpo');
+        if(histTbody) {
+            histTbody.innerHTML = '';
+            if(sHist !== ""){
+                tableHist.classList.remove('hide-table');
+                if(db.historico) db.historico.slice().reverse().forEach((h) => {
+                    if(h.cliente.toUpperCase().includes(sHist)) {
+                        histTbody.innerHTML += `<tr><td>${h.data}</td><td>${h.cliente}</td><td>R$ ${parseFloat(h.total).toFixed(2)}</td><td><select onchange="updateStatus(${h.id}, this.value)"><option ${h.status==='Pendente'?'selected':''}>Pendente</option><option ${h.status==='Aprovado'?'selected':''}>Aprovado</option><option ${h.status==='Cancelado'?'selected':''}>Cancelado</option></select></td><td class="no-print"><button class="btn btn-edit" onclick="editOrcHist(${h.id})">EDITAR</button><button class="btn btn-del" onclick="if(confirm('Excluir?')){db.historico.splice(db.historico.findIndex(x=>x.id===${h.id}),1);save();}">DEL</button></td></tr>`;
+                    }
+                });
+            } else { tableHist.classList.add('hide-table'); }
+        }
+        const logTbody = document.getElementById('tbl-log-corpo');
+        if(logTbody) {
+            logTbody.innerHTML = '';
+            if(db.movimentacoes) db.movimentacoes.slice().reverse().forEach(m => {
+                logTbody.innerHTML += `<tr><td>${m.data}</td><td>${m.produto}</td><td>${m.qtd}</td><td>${m.destino}</td></tr>`;
+            });
+        }
+        const userTbody = document.getElementById('tbl-users-corpo');
+        if(userTbody) {
+            userTbody.innerHTML = '';
+            if(db.users) db.users.forEach((u, idx) => {
+                userTbody.innerHTML += `<tr><td>${u.user}</td><td>${u.level}</td><td><button class="btn btn-del" onclick="if(confirm('Excluir?')){db.users.splice(${idx},1);save();}">DEL</button></td></tr>`;
+            });
+        }
+    }
+
+    /* --- MÓDULO IA CONSULTOR: FUNÇÕES ALOCADAS NO FINAL DO SCRIPT --- */
+    function addChatMessage(role, text) {
+        const container = document.getElementById('chat-container');
+        const div = document.createElement('div');
+        div.className = `msg msg-${role}`;
+        div.innerText = text;
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+    }
+
+    async function sendChat() {
+        const input = document.getElementById('chat-input');
+        const text = input.value.trim();
+        if(!text) return;
+        addChatMessage('user', text);
+        input.value = '';
+
+        let response = "";
+        const t = text.toLowerCase();
+
+        // Consulta real no seu banco de dados (db)
+        if(t.includes("preço") || t.includes("estoque") || t.includes("quanto custa")) {
+            const busca = db.estoque.find(i => t.includes(i.desc.toLowerCase()));
+            if(busca) {
+                response = `✅ Item: ${busca.desc}. Preço: R$ ${parseFloat(busca.val).toFixed(2)}. Saldo: ${busca.qtd} ${busca.unid}.`;
+            } else {
+                response = "Não encontrei esse item. Confirme o nome cadastrado no estoque.";
+            }
+        } 
+        // Lógica de Engenharia ASB (Motores e Cabos)
+        else if(t.includes("motor") || t.includes("cv") || t.includes("bitola") || t.includes("cabo")) {
+            const cvMatch = t.match(/\d+/);
+            const cv = cvMatch ? parseFloat(cvMatch[0]) : 0;
+            if(cv > 0) {
+                const amp = (cv * 736) / (1.73 * 380 * 0.85 * 0.8);
+                let bitola = amp > 21 ? (amp > 28 ? "6.0mm²" : "4.0mm²") : "2.5mm²";
+                response = `⚙️ Engenharia ASB: Para motor de ${cv}CV (380V), corrente ~${amp.toFixed(1)}A. Bitola sugerida (NBR 5410): ${bitola}.`;
+            } else {
+                response = "Qual a potência do motor em CV para o dimensionamento?";
+            }
+        } else {
+            response = "Sou o assistente técnico ASB. Posso consultar preços, estoque ou fazer dimensionamentos elétricos. O que deseja?";
+        }
+        setTimeout(() => addChatMessage('ai', response), 600);
+    }
+
+    function startVoiceRecognition() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) return alert("Navegador sem suporte a voz.");
+        const rec = new SpeechRecognition();
+        rec.lang = 'pt-BR'; rec.start();
+        rec.onresult = (e) => {
+            document.getElementById('chat-input').value = e.results[0][0].transcript;
+            sendChat();
+        };
+    }
+</script>
 </body>
 </html>
