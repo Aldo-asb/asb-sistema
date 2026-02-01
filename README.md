@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#1a1a1a">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Gestão ASB ENG - v106.0</title>
+    <title>Gestão ASB ENG - v108.0</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
@@ -62,8 +62,8 @@
         table { width: 100%; border-collapse: collapse; margin-top: 15px; border: 1px solid #eee; border-radius: 8px; overflow: hidden; }
         th { background: #fdfdfd; padding: 8px 15px; text-align: left; border-bottom: 2px solid #eee; font-size: 11px; color: #888; text-transform: uppercase; }
         
-        /* MUDANÇA 1: Espaçamento reduzido para compactar as linhas em todas as telas */
-        td { padding: 2px 15px !important; border-bottom: 1px solid #f6f6f6; font-size: 13px; line-height: 1.1 !important; height: 24px; }
+        /* CORREÇÃO 1: Redução absoluta do espaçamento das linhas */
+        td { padding: 2px 15px !important; border-bottom: 1px solid #f6f6f6; font-size: 13px; line-height: 1.1 !important; height: 26px; }
         
         .btn { padding: 10px 20px; border: none; border-radius: 6px; color: white; cursor: pointer; font-weight: bold; text-transform: uppercase; transition: 0.3s; height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 10px; }
         .btn-add { background: var(--asb-success-grad); }
@@ -267,7 +267,7 @@
 </div>
 
 <script>
-    // CONFIGURAÇÃO FIREBASE
+    // CONFIGURAÇÃO FIREBASE INTEGRAL
     const firebaseConfig = {
         apiKey: "AIzaSyA8rHSh4HW_bSVzccYPb49aQJ5QlvakAKo",
         authDomain: "asb-sistema.firebaseapp.com",
@@ -301,7 +301,9 @@
     }
     initCloud();
 
-    function save() { database.ref(DB_PATH).set(db).catch(e => console.error("Erro ao salvar", e)); }
+    function save() {
+        database.ref(DB_PATH).set(db).catch(e => console.error("Erro ao salvar nuvem", e));
+    }
 
     function handleLogin() {
         const u = document.getElementById('user-input').value.toLowerCase().trim();
@@ -312,15 +314,19 @@
             document.getElementById('main-app').style.display = 'block';
             document.getElementById('welcome-msg').innerText = `Logado: ${u.toUpperCase()}`;
             if((found && found.level === 'master') || u === 'admin') document.getElementById('nav-master').style.display = 'block';
-            refreshTemperature(); render();
-        } else { alert("Erro de Login"); }
+            refreshTemperature();
+            render();
+        } else {
+            alert("Dados de acesso incorretos.");
+        }
     }
 
     function openTab(id, btn) {
         document.querySelectorAll('.section-panel').forEach(s => s.classList.remove('active'));
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
         document.getElementById(id).classList.add('active');
-        btn.classList.add('active'); render();
+        btn.classList.add('active');
+        render();
     }
 
     function mostrarFormEstoque() { document.getElementById('form-estoque').style.display = 'grid'; }
@@ -464,10 +470,10 @@
         return total;
     }
 
-    // MUDANÇA 2: Registro e Edição do Histórico
+    // CORREÇÃO 2: Registro e Edição no Histórico
     function finalizarERegistrar() {
         const cli = document.getElementById('orc-cli-sel').value;
-        if(!cli || !db.orc_temp || db.orc_temp.length === 0) return alert("Selecione cliente e adicione itens!");
+        if(!cli || !db.orc_temp || db.orc_temp.length === 0) return alert("Dados incompletos!");
         if(!db.historico) db.historico = [];
         
         const orcData = { 
@@ -490,24 +496,28 @@
         const cObj = db.clientes.find(c => c.nome === cli);
         if(cObj) cObj.ultima_compra = new Date().toLocaleString();
         
-        db.orc_temp = [];
-        currentEditingOrcId = null;
+        db.orc_temp = []; currentEditingOrcId = null;
         document.getElementById('btn-finalizar-orc').innerText = "✅ FINALIZAR E SALVAR";
-        save(); alert("Orçamento registrado!");
+        save(); alert("Orçamento salvo na nuvem!");
     }
 
-    // MUDANÇA 3: Movimentação automática ao Aprovar
+    // CORREÇÃO 3: Registro automático de Movimentação ao aprovar
     function updateStatus(id, newStatus) {
         const h = db.historico.find(x => x.id === id);
         if(h && h.status !== newStatus) {
             if(newStatus === 'Aprovado') {
-                if(confirm("Confirmar aprovação? Isso reduzirá o estoque e registrará a saída.")) {
+                if(confirm("Confirmar aprovação? Irá abater o estoque e registrar movimentação.")) {
                     h.itens.forEach(it => {
                         const p = db.estoque.find(e => e.desc === it.desc);
                         if(p) { 
                             p.qtd -= it.qtd; 
                             if(!db.movimentacoes) db.movimentacoes = [];
-                            db.movimentacoes.push({data: new Date().toLocaleString(), produto: it.desc, qtd: it.qtd, destino: h.cliente}); 
+                            db.movimentacoes.push({
+                                data: new Date().toLocaleString(), 
+                                produto: it.desc, 
+                                qtd: it.qtd, 
+                                destino: h.cliente
+                            }); 
                         }
                     });
                     h.status = 'Aprovado';
@@ -538,6 +548,8 @@
         if(u && p) {
             if(!db.users) db.users = [];
             db.users.push({user: u, pass: p, level: 'comum'});
+            document.getElementById('new-user').value = '';
+            document.getElementById('new-pass').value = '';
             save();
         }
     }
@@ -556,16 +568,19 @@
     function importDB(input) {
         const reader = new FileReader();
         reader.onload = function() {
-            db = JSON.parse(reader.result); save(); alert("Sucesso!");
+            try {
+                const imported = JSON.parse(reader.result);
+                if(confirm("Substituir dados atuais?")) { db = imported; save(); alert("Sucesso!"); }
+            } catch(e) { alert("Erro ao importar."); }
         };
         reader.readAsText(input.files[0]);
     }
 
     function limparHistoricoGeral() {
-        if(confirm("Apagar histórico e logs?")) { db.historico = []; db.movimentacoes = []; save(); }
+        if(confirm("Apagar histórico e movimentações?")) { db.historico = []; db.movimentacoes = []; save(); }
     }
 
-    function forceRealtimeSync() { initCloud(); alert("Reiniciado!"); }
+    function forceRealtimeSync() { initCloud(); alert("Canal de dados reiniciado."); }
 
     function render(filter) {
         if(!db) return;
