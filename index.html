@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#1a1a1a">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Gestão ASB ENG - v111.0</title>
+    <title>Gestão ASB ENG - v112.0</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
@@ -61,37 +61,33 @@
         
         table { width: 100%; border-collapse: collapse; margin-top: 15px; border: 1px solid #eee; border-radius: 8px; overflow: hidden; }
         th { background: #fdfdfd; padding: 10px 15px; text-align: left; border-bottom: 2px solid #eee; font-size: 11px; color: #888; text-transform: uppercase; }
-        
-        /* MUDANÇA 1: Espaçamento de linhas compactado para todas as telas */
         td { padding: 1px 15px !important; border-bottom: 1px solid #f6f6f6; font-size: 13px; line-height: 1.0 !important; height: 22px; }
         
         .btn { padding: 10px 20px; border: none; border-radius: 6px; color: white; cursor: pointer; font-weight: bold; text-transform: uppercase; transition: 0.3s; height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 10px; }
         .btn-add { background: var(--asb-success-grad); }
         .btn-new { background: #6c757d; }
         .btn-edit { background: #ffc107; color: #000; padding: 5px 12px; height: 30px; }
-        .btn-del { background: #e74c3c; padding: 5px 12px; height: 30px; }
+        .btn-del { background: #dc3545; padding: 5px 12px; height: 30px; }
         .btn-print { background: var(--asb-blue-grad); width: 100%; margin-top: 15px; height: 50px; font-size: 14px; }
-
-        .edit-only { display: none; }
-        .edit-highlight { background: #fff9c4 !important; border: 2px solid #fbc02d !important; }
 
         .summary-box { background: #f8f9fa; padding: 15px; margin-top: 15px; border-radius: 10px; border: 1px solid #eee; }
         .summary-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #eee; font-size: 13px; }
 
-        .temp-refresh-btn { background: var(--asb-success); color: white; border: none; border-radius: 4px; padding: 5px 10px; cursor: pointer; font-size: 10px; margin-left: 10px; }
+        .hide-table { display: none; }
 
         @media print {
             body { background: white !important; }
             nav, .no-print, .search-hero, header, .form-grid, .btn { display: none !important; }
             .container { box-shadow: none; border: none; width: 100% !important; margin: 0; padding: 0; }
             .section-panel { display: none !important; }
-            #tab-orcamento.active { display: block !important; }
+            #tab-estoque.active, #tab-clientes.active, #tab-orcamento.active { display: block !important; }
+            /* CORREÇÃO 2: Forçar exibição das tabelas na impressão mesmo se estiverem ocultas na tela */
+            #table-estoque, #table-clientes, #table-historico, #orc-area { display: table !important; }
+            #orc-area { display: block !important; }
             table th:last-child, table td:last-child { display: none !important; }
             .summary-box { border: 1px solid #333; }
             td { padding: 0px 10px !important; font-size: 11px !important; height: 16px !important; }
         }
-        /* Lógica de ocultação de tabelas vazias */
-        .hide-table { display: none; }
     </style>
 </head>
 <body>
@@ -141,15 +137,15 @@
             </div>
             <div class="form-grid" id="form-estoque">
                 <div class="field-group" style="grid-column: span 2;"><label>Produto / Descrição</label><input type="text" id="est-desc"></div>
-                <div class="field-group"><label>Unid.</label><input type="text" id="est-unid" placeholder="Ex: UN, PC, KG"></div>
+                <div class="field-group"><label>Unid.</label><input type="text" id="est-unid"></div>
                 <div class="field-group"><label>NCM</label><input type="text" id="est-ncm"></div>
                 <div class="field-group"><label>CFOP</label><input type="text" id="est-cfop"></div>
                 <div class="field-group"><label>CST</label><input type="text" id="est-cst"></div>
-                <div class="field-group"><label>IPI (%)</label><input type="number" id="est-ipi"></div>
-                <div class="field-group"><label>ICMS (%)</label><input type="number" id="est-icms"></div>
-                <div class="field-group edit-only"><label>Preço Compra (R$)</label><input type="number" id="est-compra" class="edit-highlight" oninput="calcularPrecoVenda()"></div>
-                <div class="field-group edit-only"><label>Aumento (%)</label><input type="number" id="est-markup" class="edit-highlight" oninput="calcularPrecoVenda()"></div>
-                <div class="field-group"><label>Preço Venda (R$)</label><input type="number" id="est-val"></div>
+                <div class="field-group"><label>Preço Compra (R$)</label><input type="number" id="est-compra" oninput="calcularPrecoVenda()"></div>
+                <div class="field-group"><label>Markup (%)</label><input type="number" id="est-markup" oninput="calcularPrecoVenda()"></div>
+                <div class="field-group"><label>IPI (%)</label><input type="number" id="est-ipi" oninput="calcularPrecoVenda()"></div>
+                <div class="field-group"><label>ICMS (%)</label><input type="number" id="est-icms" oninput="calcularPrecoVenda()"></div>
+                <div class="field-group"><label>Valor Final (Venda)</label><input type="number" id="est-val" step="0.01"></div>
                 <div class="field-group"><label>Qtd em Estoque</label><input type="number" id="est-qtd"></div>
                 <div class="form-actions-column">
                     <button class="btn btn-add" id="btn-save-est" onclick="addEstoque()">SALVAR</button>
@@ -158,7 +154,7 @@
             </div>
             <table id="table-estoque">
                 <thead>
-                    <tr><th>Descrição</th><th>Unid.</th><th>NCM</th><th>CFOP</th><th>Vlr. Venda</th><th>Estoque</th><th class="no-print">Ações</th></tr>
+                    <tr><th>Descrição</th><th>Unid.</th><th>NCM</th><th>Vlr. Venda</th><th>Estoque</th><th class="no-print">Ações</th></tr>
                 </thead>
                 <tbody id="tbl-estoque-corpo"></tbody>
             </table>
@@ -269,7 +265,6 @@
 </div>
 
 <script>
-    // CONFIGURAÇÃO FIREBASE INTEGRAL - v111.0
     const firebaseConfig = {
         apiKey: "AIzaSyA8rHSh4HW_bSVzccYPb49aQJ5QlvakAKo",
         authDomain: "asb-sistema.firebaseapp.com",
@@ -323,7 +318,6 @@
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
         document.getElementById(id).classList.add('active');
         btn.classList.add('active');
-        // Ao trocar de aba, limpa as buscas para esconder as tabelas
         document.getElementById('search-est-input').value = "";
         document.getElementById('search-cli-input').value = "";
         document.getElementById('search-hist').value = "";
@@ -331,6 +325,20 @@
     }
 
     function mostrarFormEstoque() { document.getElementById('form-estoque').style.display = 'grid'; }
+    
+    // CORREÇÃO 1: Lógica de Preço de Venda com Impostos
+    function calcularPrecoVenda() {
+        const compra = parseFloat(document.getElementById('est-compra').value) || 0;
+        const markup = parseFloat(document.getElementById('est-markup').value) || 0;
+        const ipi = parseFloat(document.getElementById('est-ipi').value) || 0;
+        const icms = parseFloat(document.getElementById('est-icms').value) || 0;
+        
+        let baseVenda = compra + (compra * (markup / 100));
+        let valorComImpostos = baseVenda + (baseVenda * (ipi / 100)) + (baseVenda * (icms / 100));
+        
+        document.getElementById('est-val').value = valorComImpostos.toFixed(2);
+    }
+
     function addEstoque() {
         const item = {
             desc: document.getElementById('est-desc').value.trim(),
@@ -338,10 +346,10 @@
             ncm: document.getElementById('est-ncm').value.trim(),
             cfop: document.getElementById('est-cfop').value.trim(),
             cst: document.getElementById('est-cst').value.trim(),
-            ipi: parseFloat(document.getElementById('est-ipi').value) || 0,
-            icms: parseFloat(document.getElementById('est-icms').value) || 0,
             compra: parseFloat(document.getElementById('est-compra').value) || 0,
             markup: parseFloat(document.getElementById('est-markup').value) || 0,
+            ipi: parseFloat(document.getElementById('est-ipi').value) || 0,
+            icms: parseFloat(document.getElementById('est-icms').value) || 0,
             val: parseFloat(document.getElementById('est-val').value) || 0,
             qtd: parseInt(document.getElementById('est-qtd').value) || 0
         };
@@ -349,7 +357,7 @@
         if(editingEstoqueIndex !== null) db.estoque[editingEstoqueIndex] = item;
         else db.estoque.push(item);
         cancelarEdicao(); 
-        document.getElementById('search-est-input').value = ""; // Limpa busca para ocultar
+        document.getElementById('search-est-input').value = "";
         save();
     }
 
@@ -360,10 +368,10 @@
         document.getElementById('est-ncm').value = i.ncm;
         document.getElementById('est-cfop').value = i.cfop;
         document.getElementById('est-cst').value = i.cst;
-        document.getElementById('est-ipi').value = i.ipi;
-        document.getElementById('est-icms').value = i.icms;
         document.getElementById('est-compra').value = i.compra;
         document.getElementById('est-markup').value = i.markup;
+        document.getElementById('est-ipi').value = i.ipi;
+        document.getElementById('est-icms').value = i.icms;
         document.getElementById('est-val').value = i.val;
         document.getElementById('est-qtd').value = i.qtd;
         editingEstoqueIndex = idx; mostrarFormEstoque();
@@ -372,13 +380,7 @@
 
     function cancelarEdicao() {
         editingEstoqueIndex = null; document.getElementById('form-estoque').style.display = 'none';
-        ['est-desc','est-unid','est-ncm','est-cfop','est-cst','est-ipi','est-icms','est-compra','est-markup','est-val','est-qtd'].forEach(id => document.getElementById(id).value = '');
-    }
-
-    function calcularPrecoVenda() {
-        const comp = parseFloat(document.getElementById('est-compra').value) || 0;
-        const mark = parseFloat(document.getElementById('est-markup').value) || 0;
-        document.getElementById('est-val').value = (comp + (comp * (mark/100))).toFixed(2);
+        ['est-desc','est-unid','est-ncm','est-cfop','est-cst','est-compra','est-markup','est-ipi','est-icms','est-val','est-qtd'].forEach(id => document.getElementById(id).value = '');
     }
 
     function mostrarFormCliente() { document.getElementById('form-cliente').style.display = 'grid'; }
@@ -399,7 +401,7 @@
         if(editingClienteIndex !== null) db.clientes[editingClienteIndex] = c;
         else db.clientes.push(c);
         cancelarEdicaoCliente(); 
-        document.getElementById('search-cli-input').value = ""; // Limpa busca para ocultar
+        document.getElementById('search-cli-input').value = "";
         save();
     }
 
@@ -475,7 +477,6 @@
         const cli = document.getElementById('orc-cli-sel').value;
         if(!cli || !db.orc_temp || db.orc_temp.length === 0) return alert("Erro nos dados!");
         if(!db.historico) db.historico = [];
-        
         const orcData = { 
             id: currentEditingOrcId || Date.now(), 
             data: new Date().toLocaleString(), 
@@ -487,12 +488,10 @@
             mo_fixo: document.getElementById('orc-mo-fixo').value,
             perc_mo: document.getElementById('orc-perc-mo').value
         };
-
         if(currentEditingOrcId) {
             const idx = db.historico.findIndex(x => x.id === currentEditingOrcId);
             db.historico[idx] = orcData;
         } else { db.historico.push(orcData); }
-
         const cObj = db.clientes.find(c => c.nome === cli);
         if(cObj) cObj.ultima_compra = new Date().toLocaleString();
         db.orc_temp = []; currentEditingOrcId = null;
@@ -572,7 +571,7 @@
     function render(filter) {
         if(!db) return;
 
-        // --- ESTOQUE ---
+        // ESTOQUE
         const sEst = document.getElementById('search-est-input').value.toUpperCase();
         const tableEst = document.getElementById('table-estoque');
         const estTbody = document.getElementById('tbl-estoque-corpo');
@@ -582,13 +581,13 @@
                 tableEst.classList.remove('hide-table');
                 if(db.estoque) db.estoque.forEach((item, idx) => {
                     if(filter === 'all' || item.desc.toUpperCase().includes(sEst)) {
-                        estTbody.innerHTML += `<tr><td>${item.desc}</td><td>${item.unid}</td><td>${item.ncm}</td><td>${item.cfop}</td><td>R$ ${parseFloat(item.val).toFixed(2)}</td><td>${item.qtd}</td><td class="no-print"><button class="btn btn-edit" onclick="editEstItem(${idx})">EDIT</button><button class="btn btn-del" onclick="if(confirm('Excluir?')){db.estoque.splice(${idx},1);save();}">DEL</button></td></tr>`;
+                        estTbody.innerHTML += `<tr><td>${item.desc}</td><td>${item.unid}</td><td>${item.ncm}</td><td>R$ ${parseFloat(item.val).toFixed(2)}</td><td>${item.qtd}</td><td class="no-print"><button class="btn btn-edit" onclick="editEstItem(${idx})">EDIT</button><button class="btn btn-del" onclick="if(confirm('Excluir?')){db.estoque.splice(${idx},1);save();}">DEL</button></td></tr>`;
                     }
                 });
             } else { tableEst.classList.add('hide-table'); }
         }
 
-        // --- CLIENTES ---
+        // CLIENTES
         const sCli = document.getElementById('search-cli-input').value.toUpperCase();
         const tableCli = document.getElementById('table-clientes');
         const cliTbody = document.getElementById('tbl-clientes-corpo');
@@ -604,7 +603,7 @@
             } else { tableCli.classList.add('hide-table'); }
         }
 
-        // --- ORÇAMENTO ---
+        // ORÇAMENTO
         const orcCliSel = document.getElementById('orc-cli-sel');
         if(orcCliSel && db.clientes) {
             const current = orcCliSel.value;
@@ -624,7 +623,7 @@
             calculateTotal();
         }
 
-        // --- HISTÓRICO ---
+        // HISTÓRICO
         const sHist = document.getElementById('search-hist').value.toUpperCase();
         const tableHist = document.getElementById('table-historico');
         const histTbody = document.getElementById('tbl-historico-corpo');
@@ -640,7 +639,7 @@
             } else { tableHist.classList.add('hide-table'); }
         }
 
-        // --- MOVIMENTAÇÃO (Sempre visível nesta aba) ---
+        // MOVIMENTAÇÃO
         const logTbody = document.getElementById('tbl-log-corpo');
         if(logTbody) {
             logTbody.innerHTML = '';
@@ -649,7 +648,7 @@
             });
         }
         
-        // --- USUÁRIOS ---
+        // USUÁRIOS
         const userTbody = document.getElementById('tbl-users-corpo');
         if(userTbody) {
             userTbody.innerHTML = '';
