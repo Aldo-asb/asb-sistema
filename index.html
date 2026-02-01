@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#1a1a1a">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Gestão ASB ENG - v109.0</title>
+    <title>Gestão ASB ENG - v110.0</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
@@ -62,10 +62,10 @@
         table { width: 100%; border-collapse: collapse; margin-top: 15px; border: 1px solid #eee; border-radius: 8px; overflow: hidden; }
         th { background: #fdfdfd; padding: 10px 15px; text-align: left; border-bottom: 2px solid #eee; font-size: 11px; color: #888; text-transform: uppercase; }
         
-        /* CORREÇÃO 1: Diminuir espaçamentos de linha (Uso de !important para garantir) */
-        td { padding: 2px 15px !important; border-bottom: 1px solid #f6f6f6; font-size: 13px; line-height: 1.0 !important; height: 24px; }
+        /* MUDANÇA 1: Espaçamento de linhas compactado para todas as telas */
+        td { padding: 1px 15px !important; border-bottom: 1px solid #f6f6f6; font-size: 13px; line-height: 1.0 !important; height: 22px; }
         
-        .btn { padding: 10px 20px; border: none; border-radius: 6px; color: white; cursor: pointer; font-weight: bold; text-transform: uppercase; transition: 0.3s; height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 11px; }
+        .btn { padding: 10px 20px; border: none; border-radius: 6px; color: white; cursor: pointer; font-weight: bold; text-transform: uppercase; transition: 0.3s; height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 10px; }
         .btn-add { background: var(--asb-success-grad); }
         .btn-new { background: #6c757d; }
         .btn-edit { background: #ffc107; color: #000; padding: 5px 12px; height: 30px; }
@@ -75,21 +75,20 @@
         .edit-only { display: none; }
         .edit-highlight { background: #fff9c4 !important; border: 2px solid #fbc02d !important; }
 
-        .summary-box { background: #f8f9fa; padding: 20px; margin-top: 20px; border-radius: 10px; border: 1px solid #eee; }
-        .summary-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #eee; font-size: 14px; }
+        .summary-box { background: #f8f9fa; padding: 15px; margin-top: 15px; border-radius: 10px; border: 1px solid #eee; }
+        .summary-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #eee; font-size: 13px; }
 
         .temp-refresh-btn { background: var(--asb-success); color: white; border: none; border-radius: 4px; padding: 5px 10px; cursor: pointer; font-size: 10px; margin-left: 10px; }
 
         @media print {
-            body { background: white; }
+            body { background: white !important; }
             nav, .no-print, .search-hero, header, .form-grid, .btn { display: none !important; }
             .container { box-shadow: none; border: none; width: 100% !important; margin: 0; padding: 0; }
             .section-panel { display: none !important; }
-            #tab-estoque.active, #tab-clientes.active, #tab-orcamento.active { display: block !important; }
+            #tab-orcamento.active { display: block !important; }
             table th:last-child, table td:last-child { display: none !important; }
-            #tab-orcamento.active #orc-area { display: block !important; }
             .summary-box { border: 1px solid #333; }
-            td { padding: 1px 10px !important; font-size: 11px !important; height: 18px !important; }
+            td { padding: 0px 10px !important; font-size: 11px !important; height: 16px !important; }
         }
     </style>
 </head>
@@ -192,7 +191,7 @@
 
         <section id="tab-orcamento" class="section-panel">
             <div class="form-grid no-print" style="display:grid; grid-template-columns: 2fr 2fr 1fr 1fr auto auto;">
-                <select id="orc-cli-sel"><option value="">Selecionar Cliente</option></select>
+                <select id="orc-cli-sel" onchange="calculateTotal()"><option value="">Selecionar Cliente</option></select>
                 <input type="text" id="orc-search" placeholder="🔍 Buscar Produto..." onkeyup="filterItems()">
                 <select id="orc-item-sel"><option value="">Pesquise...</option></select>
                 <input type="number" id="orc-qtd-sel" value="1">
@@ -219,7 +218,7 @@
                 </div>
                 <div class="no-print">
                     <button class="btn btn-print" onclick="window.print()">🖨️ GERAR PDF / IMPRIMIR</button>
-                    <button class="btn btn-add" style="width:100%; margin-top:10px; height:50px;" id="btn-salvar-final" onclick="finalizarERegistrar()">✅ FINALIZAR E SALVAR</button>
+                    <button class="btn btn-add" style="width:100%; margin-top:10px; height:50px;" id="btn-finalizar-orc" onclick="finalizarERegistrar()">✅ FINALIZAR E SALVAR</button>
                 </div>
             </div>
         </section>
@@ -227,7 +226,7 @@
         <section id="tab-relatorios" class="section-panel">
             <div class="search-hero"><input type="text" id="search-hist" placeholder="🔍 Filtrar histórico por cliente..." onkeyup="render()"></div>
             <table>
-                <thead><tr><th>Data</th><th>Cliente</th><th>Valor</th><th>Status</th><th>Ações</th></tr></thead>
+                <thead><tr><th>Data</th><th>Cliente</th><th>Valor</th><th>Status</th><th class="no-print">Ações</th></tr></thead>
                 <tbody id="tbl-historico-corpo"></tbody>
             </table>
         </section>
@@ -268,7 +267,7 @@
 </div>
 
 <script>
-    // CONFIGURAÇÃO FIREBASE - v109.0
+    // CONFIGURAÇÃO FIREBASE INTEGRAL - v110.0
     const firebaseConfig = {
         apiKey: "AIzaSyA8rHSh4HW_bSVzccYPb49aQJ5QlvakAKo",
         authDomain: "asb-sistema.firebaseapp.com",
@@ -281,7 +280,6 @@
 
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
-    
     const DB_PATH = 'asb_cloud_master_v81';
     let db = { users:[{user:'admin', pass:'asb123', level:'master'}], estoque:[], clientes:[], orc_temp:[], historico:[], movimentacoes:[] };
     
@@ -298,17 +296,12 @@
                 document.getElementById('sync-indicator').innerText = "Nuvem Ativa";
                 document.getElementById('sync-indicator').className = 'sync-badge sync-online';
                 render();
-            } else {
-                save(); 
-            }
+            } else { save(); }
         });
     }
-
     initCloud();
 
-    function save() {
-        database.ref(DB_PATH).set(db).catch(e => console.error("Erro ao salvar nuvem", e));
-    }
+    function save() { database.ref(DB_PATH).set(db).catch(e => console.error("Erro Nuvem", e)); }
 
     function handleLogin() {
         const u = document.getElementById('user-input').value.toLowerCase().trim();
@@ -319,19 +312,15 @@
             document.getElementById('main-app').style.display = 'block';
             document.getElementById('welcome-msg').innerText = `Logado: ${u.toUpperCase()}`;
             if((found && found.level === 'master') || u === 'admin') document.getElementById('nav-master').style.display = 'block';
-            refreshTemperature();
-            render();
-        } else {
-            alert("Usuário ou Senha incorretos.");
-        }
+            refreshTemperature(); render();
+        } else { alert("Acesso Negado."); }
     }
 
     function openTab(id, btn) {
         document.querySelectorAll('.section-panel').forEach(s => s.classList.remove('active'));
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
         document.getElementById(id).classList.add('active');
-        btn.classList.add('active');
-        render();
+        btn.classList.add('active'); render();
     }
 
     function mostrarFormEstoque() { document.getElementById('form-estoque').style.display = 'grid'; }
@@ -350,7 +339,6 @@
             qtd: parseInt(document.getElementById('est-qtd').value) || 0
         };
         if(!item.desc) return;
-        if(!db.estoque) db.estoque = [];
         if(editingEstoqueIndex !== null) db.estoque[editingEstoqueIndex] = item;
         else db.estoque.push(item);
         cancelarEdicao(); save();
@@ -369,14 +357,12 @@
         document.getElementById('est-markup').value = i.markup;
         document.getElementById('est-val').value = i.val;
         document.getElementById('est-qtd').value = i.qtd;
-        editingEstoqueIndex = idx;
-        mostrarFormEstoque();
+        editingEstoqueIndex = idx; mostrarFormEstoque();
         document.getElementById('btn-save-est').innerText = "ATUALIZAR";
     }
 
     function cancelarEdicao() {
-        editingEstoqueIndex = null;
-        document.getElementById('form-estoque').style.display = 'none';
+        editingEstoqueIndex = null; document.getElementById('form-estoque').style.display = 'none';
         ['est-desc','est-unid','est-ncm','est-cfop','est-cst','est-ipi','est-icms','est-compra','est-markup','est-val','est-qtd'].forEach(id => document.getElementById(id).value = '');
     }
 
@@ -401,7 +387,6 @@
             ultima_compra: editingClienteIndex !== null ? db.clientes[editingClienteIndex].ultima_compra : '---'
         };
         if(!c.nome) return;
-        if(!db.clientes) db.clientes = [];
         if(editingClienteIndex !== null) db.clientes[editingClienteIndex] = c;
         else db.clientes.push(c);
         cancelarEdicaoCliente(); save();
@@ -418,14 +403,12 @@
         document.getElementById('cli-end').value = c.end;
         document.getElementById('cli-cidade').value = c.cidade;
         document.getElementById('cli-uf').value = c.uf;
-        editingClienteIndex = idx;
-        mostrarFormCliente();
+        editingClienteIndex = idx; mostrarFormCliente();
         document.getElementById('btn-save-cli').innerText = "ATUALIZAR";
     }
 
     function cancelarEdicaoCliente() {
-        editingClienteIndex = null;
-        document.getElementById('form-cliente').style.display = 'none';
+        editingClienteIndex = null; document.getElementById('form-cliente').style.display = 'none';
         ['cli-nome','cli-razao','cli-doc','cli-tel','cli-email','cli-end','cli-cidade'].forEach(id => document.getElementById(id).value = '');
     }
 
@@ -453,34 +436,34 @@
 
     function novoOrcamento() {
         if(confirm("Limpar orçamento atual?")) {
-            db.orc_temp = [];
-            currentEditingOrcId = null;
+            db.orc_temp = []; currentEditingOrcId = null;
             document.getElementById('orc-cli-sel').value = "";
             ['orc-perc-acess','orc-mo-fixo','orc-perc-mo'].forEach(id => document.getElementById(id).value = '');
-            document.getElementById('btn-salvar-final').innerText = "✅ FINALIZAR E SALVAR";
+            document.getElementById('btn-finalizar-orc').innerText = "✅ FINALIZAR E SALVAR";
             save();
         }
     }
 
     function calculateTotal() {
-        let mat = 0;
-        if(db.orc_temp) db.orc_temp.forEach(o => mat += (o.val * o.qtd));
-        const acess = mat * ((parseFloat(document.getElementById('orc-perc-acess').value) || 0)/100);
-        const mo = (parseFloat(document.getElementById('orc-mo-fixo').value) || 0) + (mat * ((parseFloat(document.getElementById('orc-perc-mo').value) || 0)/100));
+        let mat = 0; if(db.orc_temp) db.orc_temp.forEach(o => mat += (o.val * o.qtd));
+        const pA = parseFloat(document.getElementById('orc-perc-acess').value) || 0;
+        const mF = parseFloat(document.getElementById('orc-mo-fixo').value) || 0;
+        const pM = parseFloat(document.getElementById('orc-perc-mo').value) || 0;
+        const acess = mat * (pA/100);
+        const mo = mF + (mat * (pM/100));
         const total = mat + acess + mo;
         document.getElementById('res-materiais').innerText = `R$ ${mat.toFixed(2)}`;
         document.getElementById('res-acessorios').innerText = `R$ ${acess.toFixed(2)}`;
         document.getElementById('res-mo').innerText = `R$ ${mo.toFixed(2)}`;
         document.getElementById('res-total-final').innerText = `R$ ${total.toFixed(2)}`;
-        const cli = document.getElementById('orc-cli-sel').value;
-        document.getElementById('orc-info-cliente').innerText = cli ? "CLIENTE: " + cli : "";
+        document.getElementById('orc-info-cliente').innerText = document.getElementById('orc-cli-sel').value ? "CLIENTE: " + document.getElementById('orc-cli-sel').value : "";
         return total;
     }
 
-    // MUDANÇA 2: FINALIZAR COM REGISTRO PARA EDIÇÃO FUTURA
+    // MUDANÇA 2: FINALIZAÇÃO COM REGISTRO PARA EDIÇÃO
     function finalizarERegistrar() {
         const cli = document.getElementById('orc-cli-sel').value;
-        if(!cli || !db.orc_temp || db.orc_temp.length === 0) return alert("Selecione cliente e adicione itens!");
+        if(!cli || !db.orc_temp || db.orc_temp.length === 0) return alert("Erro nos dados!");
         if(!db.historico) db.historico = [];
         
         const orcData = { 
@@ -498,25 +481,21 @@
         if(currentEditingOrcId) {
             const idx = db.historico.findIndex(x => x.id === currentEditingOrcId);
             db.historico[idx] = orcData;
-        } else {
-            db.historico.push(orcData);
-        }
+        } else { db.historico.push(orcData); }
 
         const cObj = db.clientes.find(c => c.nome === cli);
         if(cObj) cObj.ultima_compra = new Date().toLocaleString();
-        
-        db.orc_temp = [];
-        currentEditingOrcId = null;
-        document.getElementById('btn-salvar-final').innerText = "✅ FINALIZAR E SALVAR";
+        db.orc_temp = []; currentEditingOrcId = null;
+        document.getElementById('btn-finalizar-orc').innerText = "✅ FINALIZAR E SALVAR";
         save(); alert("Orçamento registrado!");
     }
 
-    // MUDANÇA 3: MUDANÇA DE STATUS MANUAL E LOG DE MOVIMENTAÇÃO
+    // MUDANÇA 3: MUDANÇA MANUAL E MOVIMENTAÇÃO AUTOMÁTICA
     function updateStatus(id, newStatus) {
         const h = db.historico.find(x => x.id === id);
         if(h && h.status !== newStatus) {
             if(newStatus === 'Aprovado') {
-                if(confirm("Confirmar aprovação? Isso reduzirá o estoque e gerará movimentação.")) {
+                if(confirm("Confirmar aprovação? Isso reduzirá o estoque e registrará a saída.")) {
                     h.itens.forEach(it => {
                         const p = db.estoque.find(e => e.desc === it.desc);
                         if(p) { 
@@ -532,7 +511,6 @@
         }
     }
 
-    // FUNÇÃO PARA EDITAR ORÇAMENTO DO HISTÓRICO
     function editOrcHist(id) {
         const h = db.historico.find(x => x.id === id);
         if(h) {
@@ -543,7 +521,7 @@
             document.getElementById('orc-perc-acess').value = h.perc_acess || 0;
             document.getElementById('orc-mo-fixo').value = h.mo_fixo || 0;
             document.getElementById('orc-perc-mo').value = h.perc_mo || 0;
-            document.getElementById('btn-salvar-final').innerText = "💾 ATUALIZAR ORÇAMENTO";
+            document.getElementById('btn-finalizar-orc').innerText = "💾 ATUALIZAR";
             render();
         }
     }
@@ -553,10 +531,7 @@
         const p = document.getElementById('new-pass').value.trim();
         if(u && p) {
             if(!db.users) db.users = [];
-            db.users.push({user: u, pass: p, level: 'comum'});
-            document.getElementById('new-user').value = '';
-            document.getElementById('new-pass').value = '';
-            save();
+            db.users.push({user: u, pass: p, level: 'comum'}); save();
         }
     }
 
@@ -568,34 +543,22 @@
     function exportDB() {
         const blob = new Blob([JSON.stringify(db)], {type: 'application/json'});
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url;
-        a.download = `ASB_BACKUP.json`;
-        a.click();
+        const a = document.createElement('a'); a.href = url; a.download = `ASB_BACKUP.json`; a.click();
     }
 
     function importDB(input) {
         const reader = new FileReader();
         reader.onload = function() {
-            try {
-                const imported = JSON.parse(reader.result);
-                if(confirm("Substituir dados atuais?")) {
-                    db = imported; save(); alert("Importação completa!");
-                }
-            } catch(e) { alert("JSON Inválido."); }
+            db = JSON.parse(reader.result); save(); alert("Sucesso!");
         };
         reader.readAsText(input.files[0]);
     }
 
     function limparHistoricoGeral() {
-        if(confirm("Deseja apagar histórico e logs?")) {
-            db.historico = []; db.movimentacoes = []; save();
-        }
+        if(confirm("Limpar logs?")) { db.historico = []; db.movimentacoes = []; save(); }
     }
 
-    function forceRealtimeSync() {
-        initCloud();
-        alert("Canal Cloud Reiniciado.");
-    }
+    function forceRealtimeSync() { initCloud(); alert("Reiniciado!"); }
 
     function render(filter) {
         if(!db) return;
@@ -609,7 +572,6 @@
                 }
             });
         }
-
         const cliTbody = document.getElementById('tbl-clientes-corpo');
         if(cliTbody) {
             cliTbody.innerHTML = '';
@@ -620,16 +582,12 @@
                 }
             });
         }
-
         const orcCliSel = document.getElementById('orc-cli-sel');
         if(orcCliSel && db.clientes) {
             const current = orcCliSel.value;
             orcCliSel.innerHTML = '<option value="">Selecionar Cliente</option>';
-            db.clientes.forEach(c => {
-                orcCliSel.innerHTML += `<option value="${c.nome}" ${current === c.nome ? 'selected' : ''}>${c.nome}</option>`;
-            });
+            db.clientes.forEach(c => { orcCliSel.innerHTML += `<option value="${c.nome}" ${current === c.nome ? 'selected' : ''}>${c.nome}</option>`; });
         }
-
         const orcTbody = document.getElementById('orc-lista-corpo');
         if(orcTbody) {
             orcTbody.innerHTML = '';
@@ -638,33 +596,16 @@
             });
             calculateTotal();
         }
-
         const histTbody = document.getElementById('tbl-historico-corpo');
         if(histTbody) {
             histTbody.innerHTML = '';
             const s = document.getElementById('search-hist').value.toUpperCase();
             if(db.historico) db.historico.slice().reverse().forEach((h) => {
                 if(h.cliente.toUpperCase().includes(s)) {
-                    histTbody.innerHTML += `<tr>
-                        <td>${h.data}</td>
-                        <td>${h.cliente}</td>
-                        <td>R$ ${parseFloat(h.total).toFixed(2)}</td>
-                        <td>
-                            <select onchange="updateStatus(${h.id}, this.value)" style="width:auto; padding:2px;">
-                                <option ${h.status==='Pendente'?'selected':''}>Pendente</option>
-                                <option ${h.status==='Aprovado'?'selected':''}>Aprovado</option>
-                                <option ${h.status==='Cancelado'?'selected':''}>Cancelado</option>
-                            </select>
-                        </td>
-                        <td>
-                            <button class="btn btn-edit" onclick="editOrcHist(${h.id})">EDITAR</button>
-                            <button class="btn btn-del" onclick="if(confirm('Excluir orçamento?')){db.historico.splice(db.historico.findIndex(x=>x.id===${h.id}),1);save();}">DEL</button>
-                        </td>
-                    </tr>`;
+                    histTbody.innerHTML += `<tr><td>${h.data}</td><td>${h.cliente}</td><td>R$ ${parseFloat(h.total).toFixed(2)}</td><td><select onchange="updateStatus(${h.id}, this.value)"><option ${h.status==='Pendente'?'selected':''}>Pendente</option><option ${h.status==='Aprovado'?'selected':''}>Aprovado</option><option ${h.status==='Cancelado'?'selected':''}>Cancelado</option></select></td><td class="no-print"><button class="btn btn-edit" onclick="editOrcHist(${h.id})">EDITAR</button><button class="btn btn-del" onclick="if(confirm('Excluir?')){db.historico.splice(db.historico.findIndex(x=>x.id===${h.id}),1);save();}">DEL</button></td></tr>`;
                 }
             });
         }
-
         const logTbody = document.getElementById('tbl-log-corpo');
         if(logTbody) {
             logTbody.innerHTML = '';
@@ -672,7 +613,6 @@
                 logTbody.innerHTML += `<tr><td>${m.data}</td><td>${m.produto}</td><td>${m.qtd}</td><td>${m.destino}</td></tr>`;
             });
         }
-
         const userTbody = document.getElementById('tbl-users-corpo');
         if(userTbody) {
             userTbody.innerHTML = '';
@@ -681,7 +621,6 @@
             });
         }
     }
-
 </script>
 </body>
 </html>
