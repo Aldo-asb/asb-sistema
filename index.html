@@ -67,11 +67,8 @@
         .btn-add { background: var(--asb-success-grad); }
         .btn-new { background: #6c757d; }
         .btn-edit { background: #ffc107; color: #000; padding: 5px 12px; height: 30px; }
-        .btn-del { background: #dc3545; padding: 5px 12px; height: 30px; }
+        .btn-del { background: #e74c3c; padding: 5px 12px; height: 30px; }
         .btn-print { background: var(--asb-blue-grad); width: 100%; margin-top: 15px; height: 50px; font-size: 14px; }
-
-        .summary-box { background: #f8f9fa; padding: 15px; margin-top: 15px; border-radius: 10px; border: 1px solid #eee; }
-        .summary-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #eee; font-size: 13px; }
 
         .hide-table { display: none; }
 
@@ -81,7 +78,7 @@
             .container { box-shadow: none; border: none; width: 100% !important; margin: 0; padding: 0; }
             .section-panel { display: none !important; }
             #tab-estoque.active, #tab-clientes.active, #tab-orcamento.active { display: block !important; }
-            /* CORREÇÃO 2: Forçar exibição das tabelas na impressão mesmo se estiverem ocultas na tela */
+            /* CORREÇÃO 2 & 3: Forçar exibição das tabelas para o PDF não sair em branco */
             #table-estoque, #table-clientes, #table-historico, #orc-area { display: table !important; }
             #orc-area { display: block !important; }
             table th:last-child, table td:last-child { display: none !important; }
@@ -137,15 +134,13 @@
             </div>
             <div class="form-grid" id="form-estoque">
                 <div class="field-group" style="grid-column: span 2;"><label>Produto / Descrição</label><input type="text" id="est-desc"></div>
-                <div class="field-group"><label>Unid.</label><input type="text" id="est-unid"></div>
+                <div class="field-group"><label>Unid.</label><input type="text" id="est-unid" placeholder="Ex: UN, PC, KG"></div>
                 <div class="field-group"><label>NCM</label><input type="text" id="est-ncm"></div>
-                <div class="field-group"><label>CFOP</label><input type="text" id="est-cfop"></div>
-                <div class="field-group"><label>CST</label><input type="text" id="est-cst"></div>
-                <div class="field-group"><label>Preço Compra (R$)</label><input type="number" id="est-compra" oninput="calcularPrecoVenda()"></div>
-                <div class="field-group"><label>Markup (%)</label><input type="number" id="est-markup" oninput="calcularPrecoVenda()"></div>
-                <div class="field-group"><label>IPI (%)</label><input type="number" id="est-ipi" oninput="calcularPrecoVenda()"></div>
-                <div class="field-group"><label>ICMS (%)</label><input type="number" id="est-icms" oninput="calcularPrecoVenda()"></div>
-                <div class="field-group"><label>Valor Final (Venda)</label><input type="number" id="est-val" step="0.01"></div>
+                <div class="field-group"><label>Preço Compra (R$)</label><input type="number" id="est-compra" oninput="calcVenda()"></div>
+                <div class="field-group"><label>Markup (%)</label><input type="number" id="est-markup" oninput="calcVenda()"></div>
+                <div class="field-group"><label>IPI (%)</label><input type="number" id="est-ipi" oninput="calcVenda()"></div>
+                <div class="field-group"><label>ICMS (%)</label><input type="number" id="est-icms" oninput="calcVenda()"></div>
+                <div class="field-group"><label>Preço Venda Final</label><input type="number" id="est-val" step="0.01"></div>
                 <div class="field-group"><label>Qtd em Estoque</label><input type="number" id="est-qtd"></div>
                 <div class="form-actions-column">
                     <button class="btn btn-add" id="btn-save-est" onclick="addEstoque()">SALVAR</button>
@@ -265,6 +260,7 @@
 </div>
 
 <script>
+    // FIREBASE INTEGRAL
     const firebaseConfig = {
         apiKey: "AIzaSyA8rHSh4HW_bSVzccYPb49aQJ5QlvakAKo",
         authDomain: "asb-sistema.firebaseapp.com",
@@ -324,28 +320,25 @@
         render();
     }
 
-    function mostrarFormEstoque() { document.getElementById('form-estoque').style.display = 'grid'; }
-    
-    // CORREÇÃO 1: Lógica de Preço de Venda com Impostos
-    function calcularPrecoVenda() {
+    // MUDANÇA 1: Função de cálculo de impostos
+    function calcVenda() {
         const compra = parseFloat(document.getElementById('est-compra').value) || 0;
-        const markup = parseFloat(document.getElementById('est-markup').value) || 0;
+        const mark = parseFloat(document.getElementById('est-markup').value) || 0;
         const ipi = parseFloat(document.getElementById('est-ipi').value) || 0;
         const icms = parseFloat(document.getElementById('est-icms').value) || 0;
         
-        let baseVenda = compra + (compra * (markup / 100));
-        let valorComImpostos = baseVenda + (baseVenda * (ipi / 100)) + (baseVenda * (icms / 100));
+        const precoComMarkup = compra + (compra * (mark / 100));
+        const total = precoComMarkup + (precoComMarkup * (ipi / 100)) + (precoComMarkup * (icms / 100));
         
-        document.getElementById('est-val').value = valorComImpostos.toFixed(2);
+        document.getElementById('est-val').value = total.toFixed(2);
     }
 
+    function mostrarFormEstoque() { document.getElementById('form-estoque').style.display = 'grid'; }
     function addEstoque() {
         const item = {
             desc: document.getElementById('est-desc').value.trim(),
             unid: document.getElementById('est-unid').value.trim(),
             ncm: document.getElementById('est-ncm').value.trim(),
-            cfop: document.getElementById('est-cfop').value.trim(),
-            cst: document.getElementById('est-cst').value.trim(),
             compra: parseFloat(document.getElementById('est-compra').value) || 0,
             markup: parseFloat(document.getElementById('est-markup').value) || 0,
             ipi: parseFloat(document.getElementById('est-ipi').value) || 0,
@@ -366,21 +359,18 @@
         document.getElementById('est-desc').value = i.desc;
         document.getElementById('est-unid').value = i.unid;
         document.getElementById('est-ncm').value = i.ncm;
-        document.getElementById('est-cfop').value = i.cfop;
-        document.getElementById('est-cst').value = i.cst;
-        document.getElementById('est-compra').value = i.compra;
-        document.getElementById('est-markup').value = i.markup;
-        document.getElementById('est-ipi').value = i.ipi;
-        document.getElementById('est-icms').value = i.icms;
+        document.getElementById('est-compra').value = i.compra || 0;
+        document.getElementById('est-markup').value = i.markup || 0;
+        document.getElementById('est-ipi').value = i.ipi || 0;
+        document.getElementById('est-icms').value = i.icms || 0;
         document.getElementById('est-val').value = i.val;
         document.getElementById('est-qtd').value = i.qtd;
         editingEstoqueIndex = idx; mostrarFormEstoque();
-        document.getElementById('btn-save-est').innerText = "ATUALIZAR";
     }
 
     function cancelarEdicao() {
         editingEstoqueIndex = null; document.getElementById('form-estoque').style.display = 'none';
-        ['est-desc','est-unid','est-ncm','est-cfop','est-cst','est-compra','est-markup','est-ipi','est-icms','est-val','est-qtd'].forEach(id => document.getElementById(id).value = '');
+        ['est-desc','est-unid','est-ncm','est-compra','est-markup','est-ipi','est-icms','est-val','est-qtd'].forEach(id => document.getElementById(id).value = '');
     }
 
     function mostrarFormCliente() { document.getElementById('form-cliente').style.display = 'grid'; }
@@ -417,7 +407,6 @@
         document.getElementById('cli-cidade').value = c.cidade;
         document.getElementById('cli-uf').value = c.uf;
         editingClienteIndex = idx; mostrarFormCliente();
-        document.getElementById('btn-save-cli').innerText = "ATUALIZAR";
     }
 
     function cancelarEdicaoCliente() {
@@ -452,7 +441,6 @@
             db.orc_temp = []; currentEditingOrcId = null;
             document.getElementById('orc-cli-sel').value = "";
             ['orc-perc-acess','orc-mo-fixo','orc-perc-mo'].forEach(id => document.getElementById(id).value = '');
-            document.getElementById('btn-finalizar-orc').innerText = "✅ FINALIZAR E SALVAR";
             save();
         }
     }
@@ -492,10 +480,7 @@
             const idx = db.historico.findIndex(x => x.id === currentEditingOrcId);
             db.historico[idx] = orcData;
         } else { db.historico.push(orcData); }
-        const cObj = db.clientes.find(c => c.nome === cli);
-        if(cObj) cObj.ultima_compra = new Date().toLocaleString();
         db.orc_temp = []; currentEditingOrcId = null;
-        document.getElementById('btn-finalizar-orc').innerText = "✅ FINALIZAR E SALVAR";
         save(); alert("Orçamento registrado!");
     }
 
@@ -529,7 +514,6 @@
             document.getElementById('orc-perc-acess').value = h.perc_acess || 0;
             document.getElementById('orc-mo-fixo').value = h.mo_fixo || 0;
             document.getElementById('orc-perc-mo').value = h.perc_mo || 0;
-            document.getElementById('btn-finalizar-orc').innerText = "💾 ATUALIZAR";
             render();
         }
     }
