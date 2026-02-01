@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#1a1a1a">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Gestão ASB ENG - v103.0</title>
+    <title>Gestão ASB ENG - v104.0</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
@@ -60,34 +60,28 @@
         input, select { padding: 12px; border: 1px solid #ccc; border-radius: 6px; width: 100%; box-sizing: border-box; font-size: 14px; }
         
         table { width: 100%; border-collapse: collapse; margin-top: 15px; border: 1px solid #eee; border-radius: 8px; overflow: hidden; }
-        th { background: #fdfdfd; padding: 8px 15px; text-align: left; border-bottom: 2px solid #eee; font-size: 11px; color: #888; text-transform: uppercase; }
+        th { background: #fdfdfd; padding: 10px 15px; text-align: left; border-bottom: 2px solid #eee; font-size: 11px; color: #888; text-transform: uppercase; }
         
-        /* CORREÇÃO 1: Linhas comprimidas para orçamentos grandes */
+        /* CORREÇÃO 1: Redução cirúrgica do espaçamento das linhas */
         td { padding: 2px 15px !important; border-bottom: 1px solid #f6f6f6; font-size: 13px; line-height: 1.1 !important; height: 26px; }
         
-        .btn { padding: 10px 20px; border: none; border-radius: 6px; color: white; cursor: pointer; font-weight: bold; text-transform: uppercase; transition: 0.3s; height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 11px; }
+        .btn { padding: 10px 20px; border: none; border-radius: 6px; color: white; cursor: pointer; font-weight: bold; text-transform: uppercase; transition: 0.3s; height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 11px; }
         .btn-add { background: var(--asb-success-grad); }
         .btn-new { background: #6c757d; }
         .btn-edit { background: #ffc107; color: #000; padding: 5px 12px; height: 30px; }
         .btn-del { background: #e74c3c; padding: 5px 12px; height: 30px; }
         .btn-print { background: var(--asb-blue-grad); width: 100%; margin-top: 15px; height: 50px; font-size: 14px; }
 
-        .edit-only { display: none; }
-        .edit-highlight { background: #fff9c4 !important; border: 2px solid #fbc02d !important; }
-
         .summary-box { background: #f8f9fa; padding: 15px; margin-top: 15px; border-radius: 10px; border: 1px solid #eee; }
         .summary-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #eee; font-size: 14px; }
 
-        .temp-refresh-btn { background: var(--asb-success); color: white; border: none; border-radius: 4px; padding: 5px 10px; cursor: pointer; font-size: 10px; margin-left: 10px; }
-
         @media print {
-            body { background: white !important; }
+            body { background: white; }
             nav, .no-print, .search-hero, header, .form-grid, .btn { display: none !important; }
-            .container { box-shadow: none; border: none; width: 100% !important; margin: 0; padding: 0; }
+            .container { box-shadow: none; border: none; width: 100%; margin: 0; padding: 0; }
             .section-panel { display: none !important; }
-            #tab-estoque.active, #tab-clientes.active, #tab-orcamento.active { display: block !important; }
+            #tab-orcamento.active { display: block !important; }
             table th:last-child, table td:last-child { display: none !important; }
-            #tab-orcamento.active #orc-area { display: block !important; }
             .summary-box { border: 1px solid #333; }
             td { padding: 1px 10px !important; font-size: 11px !important; height: 20px !important; }
         }
@@ -268,7 +262,6 @@
 </div>
 
 <script>
-    // CONFIGURAÇÃO FIREBASE - v103.0
     const firebaseConfig = {
         apiKey: "AIzaSyA8rHSh4HW_bSVzccYPb49aQJ5QlvakAKo",
         authDomain: "asb-sistema.firebaseapp.com",
@@ -302,9 +295,7 @@
     }
     initCloud();
 
-    function save() {
-        database.ref(DB_PATH).set(db).catch(e => console.error("Erro ao salvar nuvem", e));
-    }
+    function save() { database.ref(DB_PATH).set(db).catch(e => console.error("Erro ao salvar", e)); }
 
     function handleLogin() {
         const u = document.getElementById('user-input').value.toLowerCase().trim();
@@ -316,15 +307,14 @@
             document.getElementById('welcome-msg').innerText = `Logado: ${u.toUpperCase()}`;
             if((found && found.level === 'master') || u === 'admin') document.getElementById('nav-master').style.display = 'block';
             refreshTemperature(); render();
-        } else { alert("Usuário ou Senha incorretos."); }
+        } else { alert("Erro de Login"); }
     }
 
     function openTab(id, btn) {
         document.querySelectorAll('.section-panel').forEach(s => s.classList.remove('active'));
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
         document.getElementById(id).classList.add('active');
-        btn.classList.add('active');
-        render();
+        btn.classList.add('active'); render();
     }
 
     function mostrarFormEstoque() { document.getElementById('form-estoque').style.display = 'grid'; }
@@ -447,8 +437,7 @@
 
     function novoOrcamento() {
         if(confirm("Limpar orçamento atual?")) {
-            db.orc_temp = [];
-            currentEditingOrcId = null;
+            db.orc_temp = []; currentEditingOrcId = null;
             document.getElementById('orc-cli-sel').value = "";
             ['orc-perc-acess','orc-mo-fixo','orc-perc-mo'].forEach(id => document.getElementById(id).value = '');
             document.getElementById('btn-finalizar-orc').innerText = "✅ FINALIZAR E SALVAR";
@@ -457,8 +446,7 @@
     }
 
     function calculateTotal() {
-        let mat = 0;
-        if(db.orc_temp) db.orc_temp.forEach(o => mat += (o.val * o.qtd));
+        let mat = 0; if(db.orc_temp) db.orc_temp.forEach(o => mat += (o.val * o.qtd));
         const pA = parseFloat(document.getElementById('orc-perc-acess').value) || 0;
         const mF = parseFloat(document.getElementById('orc-mo-fixo').value) || 0;
         const pM = parseFloat(document.getElementById('orc-perc-mo').value) || 0;
@@ -473,6 +461,7 @@
         return total;
     }
 
+    // CORREÇÃO 2: Registro e Edição do Histórico
     function finalizarERegistrar() {
         const cli = document.getElementById('orc-cli-sel').value;
         if(!cli || !db.orc_temp || db.orc_temp.length === 0) return alert("Selecione cliente e adicione itens!");
@@ -497,13 +486,12 @@
 
         const cObj = db.clientes.find(c => c.nome === cli);
         if(cObj) cObj.ultima_compra = new Date().toLocaleString();
-        
-        db.orc_temp = [];
-        currentEditingOrcId = null;
+        db.orc_temp = []; currentEditingOrcId = null;
         document.getElementById('btn-finalizar-orc').innerText = "✅ FINALIZAR E SALVAR";
         save(); alert("Orçamento registrado!");
     }
 
+    // CORREÇÃO 3: Movimentação automática ao Aprovar
     function updateStatus(id, newStatus) {
         const h = db.historico.find(x => x.id === id);
         if(h && h.status !== newStatus) {
