@@ -1,926 +1,2053 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Anti-Multa Goiânia</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="apple-mobile-web-app-title" content="Gestão ASB ENG">
+    <meta name="application-name" content="Gestão ASB ENG">
+    <meta name="theme-color" content="#1a1a1a">
+    <meta name="mobile-web-app-capable" content="yes">
+    
+    <title>Gestão ASB ENG - v117.0</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js">
+    // ── Modais reutilizáveis ──────────────────────────────────────────
+    function mostrarModalInfo(msg) {
+        document.getElementById('modal-msg').innerHTML = msg;
+        document.getElementById('modal-btn-sim').style.display = 'none';
+        document.getElementById('modal-btn-nao').innerText = 'OK';
+        document.getElementById('modal-btn-nao').style.background = 'var(--asb-blue)';
+        document.getElementById('modal-confirmacao').style.display = 'flex';
+        document.getElementById('modal-btn-nao').onclick = () => {
+            document.getElementById('modal-confirmacao').style.display = 'none';
+            document.getElementById('modal-btn-sim').style.display = '';
+            document.getElementById('modal-btn-nao').innerText = 'CANCELAR';
+            document.getElementById('modal-btn-nao').style.background = '';
+        };
+    }
+
+    function mostrarModalConfirm(msg, onSim, onNao) {
+        document.getElementById('modal-msg').innerHTML = msg;
+        document.getElementById('modal-btn-sim').style.display = '';
+        document.getElementById('modal-btn-sim').innerText = 'SIM, CONFIRMAR';
+        document.getElementById('modal-btn-nao').innerText = 'CANCELAR';
+        document.getElementById('modal-btn-nao').style.background = '';
+        document.getElementById('modal-confirmacao').style.display = 'flex';
+        document.getElementById('modal-btn-sim').onclick = () => {
+            document.getElementById('modal-confirmacao').style.display = 'none';
+            if(onSim) onSim();
+        };
+        document.getElementById('modal-btn-nao').onclick = () => {
+            document.getElementById('modal-confirmacao').style.display = 'none';
+            if(onNao) onNao();
+        };
+    }
+
+    function excluirEstoque(idx) {
+        const item = db.estoque[idx];
+        mostrarModalConfirm(`Excluir produto <strong>${item ? item.desc : ''}</strong> do estoque?`, () => {
+            db.estoque.splice(idx, 1); save();
+        });
+    }
+
+    function excluirUsuario(idx) {
+        const u = db.users[idx];
+        if(u && u.level === 'master') return mostrarModalInfo("⚠️ Não é possível excluir um usuário master!");
+        mostrarModalConfirm(`Excluir usuário <strong>${u ? u.user : ''}</strong>?`, () => {
+            db.users.splice(idx, 1); save();
+        });
+    }
+
+    function excluirOrcamento(id) {
+        const h = db.historico.find(x => x.id === id);
+        const num = h ? (h.numero || h.id) : id;
+        mostrarModalConfirm(`Excluir orçamento <strong>Nº ${num}</strong>?<br>Esta ação não pode ser desfeita.`, () => {
+            db.historico.splice(db.historico.findIndex(x => x.id === id), 1);
+            save();
+        });
+    }
+
+    // ── Gerar número ao entrar na aba orçamento sem orçamento ativo ──
+    // (garante que sempre haja um número disponível)
+    document.querySelector('[onclick*="tab-orcamento"]').addEventListener('click', function() {
+        setTimeout(() => {
+            if(!currentOrcNumero && (!db.orc_temp || db.orc_temp.length === 0)) {
+                currentOrcNumero = gerarNumeroOrc();
+                const badge = document.getElementById('orc-num-badge');
+                if(badge) badge.innerText = `Nº ${currentOrcNumero}`;
+                const imp = document.getElementById('orc-num-impresso');
+                if(imp) imp.innerText = `Nº ${currentOrcNumero}  |  Data: ${new Date().toLocaleDateString('pt-BR')}`;
+            }
+        }, 100);
+    });
+
+</script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
+
     <style>
-        * { box-sizing: border-box; }
-        body { margin:0; padding:0; font-family:Arial,sans-serif; background:#121212; color:#fff; height:100vh; overflow:hidden; }
+        :root {
+            --asb-dark: #1a1a1a;
+            --asb-blue: #0056b3;
+            --asb-blue-grad: linear-gradient(135deg, #0056b3 0%, #003d7a 100%);
+            --asb-success: #28a745;
+            --asb-success-grad: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);
+            --asb-danger: #dc3545;
+            --asb-warning: #ff9800;
+            --asb-bg: #eef2f3;
+            --shadow-soft: 0 4px 15px rgba(0,0,0,0.08);
+        }
+        body { font-family: 'Segoe UI', Roboto, Arial, sans-serif; background: var(--asb-bg); margin: 0; padding: 0; color: #333; }
+        
+        #login-screen { display: flex; justify-content: center; align-items: center; height: 100vh; background: var(--asb-dark); }
+        .login-box { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 15px 35px rgba(0,0,0,0.5); width: 320px; text-align: center; }
+        
+        #main-app { display: none; padding: 20px; }
+        .container { max-width: 1200px; margin: auto; background: white; padding: 30px; border-radius: 10px; box-shadow: var(--shadow-soft); border-top: 10px solid var(--asb-dark); }
+        
+        header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 20px; margin-bottom: 25px; }
+        header h1 { margin: 0; font-size: 26px; letter-spacing: -1px; }
+        header h1 span { color: var(--asb-blue); font-weight: 300; }
+        
+        .sync-badge { font-size: 10px; padding: 4px 8px; border-radius: 10px; background: #eee; color: #666; margin-left: 10px; vertical-align: middle; transition: 0.5s; }
+        .sync-online { background: #d4edda !important; color: #155724 !important; border: 1px solid #c3e6cb !important; }
+        .sync-offline { background: #f8d7da !important; color: #721c24 !important; }
 
-        /* AUTH */
-        .tela-autenticacao { display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; padding:20px; background:#1a1c25; }
-        .card-auth { background:#23252f; padding:25px; border-radius:12px; border:2px solid #3a3d48; width:100%; max-width:360px; text-align:center; }
-        .card-auth h2 { margin:0 0 15px; color:#0079f2; font-size:20px; text-transform:uppercase; }
-        .input-auth { width:100%; padding:12px; margin:6px 0; border-radius:6px; border:2px solid #3a3d48; background:#15171f; color:white; font-size:15px; }
-        .btn-auth { width:100%; padding:14px; background:#0079f2; color:white; border:none; border-radius:6px; font-size:16px; font-weight:bold; cursor:pointer; margin-top:10px; }
-        .btn-auth-sec { background:none; border:none; color:#a2a8b2; font-size:13px; margin-top:8px; cursor:pointer; text-decoration:underline; display:block; margin:8px auto 0; }
+        nav { display: flex; gap: 8px; background: #2d2d2d; padding: 8px; border-radius: 8px; margin-bottom: 25px; flex-wrap: wrap; box-shadow: inset 0 2px 5px rgba(0,0,0,0.2); }
+        .nav-btn { padding: 12px 18px; cursor: pointer; border: none; background: transparent; color: #bbb; font-weight: 600; border-radius: 6px; transition: 0.3s; font-size: 13px; }
+        .nav-btn:hover { color: white; background: rgba(255,255,255,0.1); }
+        .nav-btn.active { background: var(--asb-blue-grad); color: white; box-shadow: 0 4px 12px rgba(0,86,179,0.3); }
 
-        /* APP */
-        #app-container { display:none; flex-direction:column; height:100vh; }
+        .section-panel { display: none; animation: fadeIn 0.3s ease; }
+        .section-panel.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .search-hero { background: #f8f9fa; padding: 25px; border-radius: 10px; border: 1px solid #e0e4e8; margin-bottom: 20px; display: flex; gap: 12px; align-items: center; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); }
+        .search-hero input { flex: 1; font-size: 16px; border: 2px solid #ddd; padding: 12px 20px; border-radius: 8px; transition: 0.3s; }
 
-        /* PAINEL SUPERIOR */
-        #painel-superior { padding:8px 12px; background:#1e1e1e; border-bottom:3px solid #333; display:flex; flex-direction:column; align-items:center; z-index:10; }
-        #texto-status { font-size:13px; font-weight:bold; color:#aaa; margin-bottom:4px; text-transform:uppercase; letter-spacing:1px; }
-        .dashboard-container { display:flex; align-items:center; justify-content:space-around; width:100%; max-width:400px; }
-        .semaforo { background:#222; padding:7px; border-radius:14px; display:flex; flex-direction:column; gap:7px; border:2px solid #444; }
-        .luz { width:22px; height:22px; border-radius:50%; background:#333; transition:background-color 0.2s,box-shadow 0.2s; }
-        .luz-verde.ativa   { background:#00e676; box-shadow:0 0 14px #00e676; }
-        .luz-amarela.ativa { background:#ffea00; box-shadow:0 0 14px #ffea00; }
-        .luz-vermelha.ativa{ background:#ff1744; box-shadow:0 0 14px #ff1744; }
-        #vel-atual { font-size:62px; font-weight:bold; color:#fff; line-height:1; }
-        .unidade-medida { font-size:13px; color:#888; font-weight:bold; }
-        .bloco-limites { display:flex; flex-direction:column; gap:4px; font-size:12px; color:#bbb; background:rgba(0,0,0,0.3); padding:8px 10px; border-radius:8px; min-width:100px; }
-        .limite-linha { display:flex; justify-content:space-between; gap:6px; }
-        .limite-valor { font-weight:bold; color:#fff; }
+        .form-grid { display: none; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; background: #fff; padding: 20px; border: 1px solid #eee; border-radius: 8px; margin-bottom: 20px; align-items: end; }
+        .field-group { display: flex; flex-direction: column; gap: 6px; }
+        .field-group label { font-size: 10px; font-weight: 800; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
 
-        /* MAPA */
-        #conteudo-central { flex:1; position:relative; width:100%; }
-        #mapa { width:100%; height:100%; z-index:1; }
+        input, select { padding: 12px; border: 1px solid #ccc; border-radius: 6px; width: 100%; box-sizing: border-box; font-size: 14px; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; border: 1px solid #eee; border-radius: 8px; overflow: hidden; }
+        th { background: #fdfdfd; padding: 10px 15px; text-align: left; border-bottom: 2px solid #eee; font-size: 11px; color: #888; text-transform: uppercase; }
+        td { padding: 1px 15px !important; border-bottom: 1px solid #f6f6f6; font-size: 13px; line-height: 1.0 !important; height: 22px; }
+        
+        /* Larguras específicas para tabela de estoque */
+        #table-estoque th:nth-child(1),
+        #table-estoque td:nth-child(1) { width: 40%; } /* Descrição - MAIOR */
+        
+        #table-estoque th:nth-child(6),
+        #table-estoque td:nth-child(6) { width: 110px; white-space: nowrap; } /* Valor Venda - MAIS LARGA */
+        
+        #table-estoque th:nth-child(7),
+        #table-estoque td:nth-child(7) { 
+            width: 50px; 
+            text-align: center;
+        } /* Estoque - MAIS ESTREITA */
+        
+        .btn { padding: 10px 20px; border: none; border-radius: 6px; color: white; cursor: pointer; font-weight: bold; text-transform: uppercase; transition: 0.3s; height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 10px; }
+        .btn-add { background: var(--asb-success-grad); }
+        .btn-new { background: #6c757d; }
+        .btn-edit { background: #e8f4fd; color: #0056b3; border: 1px solid #b8d4ee; padding: 4px 10px; height: 26px; font-size: 10px; }
+        .btn-edit:hover { background: #cce3f5; }
+        .btn-del  { background: #fdecea; color: #c0392b; border: 1px solid #f5c6c2; padding: 4px 10px; height: 26px; font-size: 10px; }
+        .btn-del:hover  { background: #fbd5d1; }
+        /* Ações na mesma linha */
+        td .acoes-inline { display: flex; gap: 5px; align-items: center; flex-wrap: nowrap; }
+        .btn-print { background: var(--asb-blue-grad); width: 100%; margin-top: 15px; height: 50px; font-size: 14px; }
 
-        /* BARRA BUSCA */
-        #barra-busca { position:absolute; top:10px; left:10px; z-index:100; display:flex; gap:6px; width:calc(100% - 110px); }
-        #input-busca { flex:1; padding:8px 12px; border-radius:8px; border:2px solid #3a3d48; background:#1e1e1e; color:white; font-size:14px; }
-        #btn-buscar { background:#0079f2; color:white; border:none; border-radius:8px; padding:8px 12px; cursor:pointer; font-size:16px; }
-        #resultados-busca { position:absolute; top:50px; left:10px; z-index:200; background:#1e1e1e; border:1px solid #444; border-radius:8px; width:calc(100% - 110px); max-height:200px; overflow-y:auto; display:none; }
-        .item-busca { padding:10px 12px; border-bottom:1px solid #333; cursor:pointer; font-size:13px; color:#ddd; }
+        .hide-table { display: none; }
 
-        /* BOTÕES LATERAIS DO MAPA */
-        #btns-mapa-lateral { position:absolute; top:10px; right:10px; z-index:100; display:flex; flex-direction:column; gap:8px; }
-        .btn-mapa-lat { background:#1e1e1e; border:2px solid #444; border-radius:10px; padding:8px 10px; text-align:center; cursor:pointer; font-size:10px; font-weight:bold; color:#fff; min-width:60px; }
-        .btn-limite-via-lat { border-color:#ffea00; color:#ffea00; }
-        .btn-limite-via-lat span { display:block; font-size:20px; color:#fff; font-weight:bold; }
+        @media print {
+            body { background: white !important; }
+            nav, .no-print, .search-hero, header, .form-grid, .btn { display: none !important; }
+            .container { box-shadow: none; border: none; width: 100% !important; margin: 0; padding: 0; }
+            .section-panel { display: none !important; }
+            #tab-estoque.active, #tab-clientes.active, #tab-orcamento.active { display: block !important; }
+            #table-estoque, #table-clientes, #table-historico, #orc-area { display: table !important; }
+            #orc-area { display: block !important; }
+            table th:last-child, table td:last-child { display: none !important; }
+            .summary-box { border: 1px solid #333; }
+            td { padding: 0px 10px !important; font-size: 11px !important; height: 16px !important; }
+        }
 
-        /* BOTÕES DE AÇÃO */
-        #painel-botoes { display:flex; padding:10px 8px 14px; background:#1e1e1e; gap:8px; border-top:2px solid #333; z-index:10; }
-        .btn-acao { flex:1; padding:14px 4px; font-size:12px; font-weight:bold; color:white; border:none; border-radius:10px; cursor:pointer; text-align:center; line-height:1.5; }
-        .btn-fixar { background:#f57c00; }
-        .btn-meus  { background:#0288d1; }
-        .btn-hist  { background:#5c35b5; }
-        .btn-pip   { background:#2e7d32; }
+        /* Summary box - totais do orçamento */
+        .summary-box { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin-top: 20px; }
+        .summary-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; font-size: 15px; border-bottom: 1px solid #eee; }
+        .summary-row:last-child { border-bottom: none; }
 
-        #info-gps { padding:4px; font-size:10px; text-align:center; background:#111; color:#666; }
+        /* Coluna de ações nos formulários */
+        .form-actions-column { display: flex; flex-direction: column; gap: 8px; justify-content: flex-end; }
 
-        /* MODAIS */
-        .modal-base { display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
-            background:#1e1e1e; border-radius:15px; padding:20px; z-index:500;
-            width:88%; max-width:340px; text-align:center; box-shadow:0 10px 25px rgba(0,0,0,0.8); }
-        .modal-base h4 { margin:0 0 15px; font-size:16px; }
-        .grid-vel { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:15px; }
-        .btn-vel { background:#333; color:white; padding:16px; font-size:20px; font-weight:bold; border-radius:8px; cursor:pointer; }
-        .btn-vel:active { opacity:0.7; }
-        .btn-cancelar-modal { background:#555; color:white; border:none; padding:10px; width:100%; border-radius:6px; font-weight:bold; cursor:pointer; }
+        /* Botão de temperatura */
+        .temp-refresh-btn { background: none; border: none; cursor: pointer; font-size: 11px; color: #888; padding: 2px 6px; }
 
-        #modal-fixar-radar  { border:3px solid #f57c00; }
-        #modal-fixar-radar h4 { color:#f57c00; }
-        #modal-fixar-radar .btn-vel { border:2px solid #f57c00; }
+        /* Busca de produto no orçamento - estilo melhorado */
+        .orc-search-wrapper { position: relative; flex: 1; }
+        .orc-search-wrapper input { width: 100%; box-sizing: border-box; }
+        #orc-resultados { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 2px solid var(--asb-blue); border-top: none; border-radius: 0 0 8px 8px; max-height: 220px; overflow-y: auto; z-index: 1000; display: none; box-shadow: 0 8px 20px rgba(0,0,0,0.15); }
+        #orc-resultados .orc-res-item { padding: 10px 15px; cursor: pointer; font-size: 13px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f0f0f0; transition: background 0.15s; }
+        #orc-resultados .orc-res-item:hover, #orc-resultados .orc-res-item.selected { background: #e8f0fe; }
+        #orc-resultados .orc-res-item .orc-res-preco { font-weight: bold; color: var(--asb-blue); white-space: nowrap; margin-left: 10px; }
+        #orc-resultados .orc-sem-resultado { padding: 12px 15px; color: #999; font-size: 13px; text-align: center; }
 
-        #modal-limite-via   { border:3px solid #ffea00; }
-        #modal-limite-via h4 { color:#ffea00; }
-        #modal-limite-via .btn-vel { border:2px solid #ffea00; }
+        /* Feedback de item adicionado */
+        .flash-success { animation: flashGreen 0.6s ease; }
+        @keyframes flashGreen { 0%,100%{ background: transparent; } 50%{ background: #d4edda; } }
 
-        /* POPUP EXCESSO */
-        #popup-velocidade { display:none; position:fixed; top:0; left:0; width:100%; height:100%;
-            background:rgba(255,23,68,0.93); z-index:900; flex-direction:column;
-            justify-content:center; align-items:center; text-align:center; }
-        #popup-velocidade h1 { font-size:52px; margin:0; color:#fff; }
-        #popup-velocidade p  { font-size:20px; color:#fff; margin:8px 0; }
-        #btn-fechar-popup { background:white; color:#ff1744; border:none; padding:14px 30px; border-radius:8px; font-size:18px; font-weight:bold; cursor:pointer; margin-top:15px; }
+        /* Modal de confirmação customizado */
+        #modal-confirmacao { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.55); z-index:9999; justify-content:center; align-items:center; }
+        .modal-box { background:white; border-radius:12px; padding:30px 35px; max-width:350px; width:90%; text-align:center; box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
+        .modal-box p { font-size:16px; margin-bottom:25px; color:#333; }
+        .modal-btns { display:flex; gap:12px; justify-content:center; }
+        .modal-btns button { flex:1; padding:12px; border-radius:8px; border:none; font-weight:bold; font-size:14px; cursor:pointer; }
+        #modal-btn-sim { background:#dc3545; color:white; }
+        #modal-btn-nao { background:#6c757d; color:white; }
 
-        /* OVERLAYS */
-        .tela-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%;
-            background:rgba(18,18,18,0.98); z-index:300; flex-direction:column; }
-        .topo-overlay { background:#1e1e1e; padding:14px; display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #333; flex-wrap:wrap; gap:8px; }
-        .topo-overlay h3 { margin:0; color:#ffea00; font-size:15px; text-transform:uppercase; }
-        .btn-fechar-overlay { background:#c62828; color:white; border:none; padding:8px 14px; font-weight:bold; border-radius:6px; cursor:pointer; }
-        .corpo-overlay-scroll { flex:1; overflow-y:auto; padding:12px; }
-        .tabela-overlay { width:100%; border-collapse:collapse; font-size:12px; }
-        .tabela-overlay th { color:#888; padding:8px 4px; border-bottom:1px solid #333; text-align:left; font-size:11px; }
-        .tabela-overlay td { padding:9px 4px; border-bottom:1px solid #222; vertical-align:middle; }
-        .btn-deletar { background:#c62828; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:11px; cursor:pointer; }
-        .hist-verde   { color:#00e676; font-weight:bold; }
-        .hist-amarelo { color:#ffea00; font-weight:bold; }
-        .hist-vermelho{ color:#ff1744; font-weight:bold; }
-        .badge-admin  { background:#f57c00; color:white; border-radius:4px; padding:2px 6px; font-size:10px; font-weight:bold; }
-        .badge-validado { background:#2e7d32; color:white; border-radius:4px; padding:2px 6px; font-size:10px; }
-        .badge-pendente { background:#555; color:#aaa; border-radius:4px; padding:2px 6px; font-size:10px; }
 
-        /* PIP */
-        #canvas-pip { display:none; }
+        /* Cabeçalho do orçamento impresso */
+        .orc-cabecalho { text-align: center; border-bottom: 3px solid #000; padding-bottom: 12px; margin-bottom: 14px; }
+        .orc-cabecalho .empresa-nome { font-size: 22px; font-weight: 900; letter-spacing: 1px; margin: 0; }
+        .orc-cabecalho .empresa-sub  { font-size: 13px; color: #555; margin: 2px 0 8px; }
+        .orc-cabecalho .orc-titulo   { font-size: 16px; font-weight: 700; border: 2px solid #000; display: inline-block; padding: 3px 30px; margin-top: 6px; letter-spacing: 2px; }
+        .orc-cabecalho .orc-num-line { font-size: 12px; color: #333; margin-top: 6px; }
+
+        /* Bloco de dados do cliente na impressão */
+        .orc-dados-cliente { background: #f8f9fa; border: 1px solid #ccc; border-radius: 6px; padding: 12px 16px; margin-bottom: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 2px 20px; font-size: 12px; }
+        .orc-dc-header { grid-column: 1/-1; display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid #ccc; padding-bottom: 6px; margin-bottom: 4px; }
+        .orc-dc-header strong { font-size: 14px; }
+        .orc-dc-numdata { font-size: 12px; font-weight: 700; color: #0056b3; white-space: nowrap; }
+        .orc-dados-cliente span { color: #444; }
+        .orc-dados-cliente span b { color: #111; }
+
+        /* Campo número orçamento na barra de controle */
+        .orc-num-badge { background: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; padding: 6px 14px; font-size: 13px; font-weight: 700; color: #856404; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+
+        /* Estilos para select de status no histórico */
+        #table-historico select {
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-repeat: no-repeat;
+            background-position: right 8px center;
+            background-size: 12px;
+            padding-right: 30px;
+            transition: all 0.3s;
+        }
+
+        #table-historico select:hover {
+            opacity: 0.9;
+            transform: scale(1.02);
+        }
+
+        #table-historico select option {
+            padding: 8px;
+            font-weight: 700;
+        }
+
+        @media print {
+            .orc-dados-cliente { background: white !important; -webkit-print-color-adjust: exact; }
+        }
+
+        /* ==================== MODAL DE DETALHES DO PRODUTO ==================== */
+        #modal-produto {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 10000;
+            justify-content: center;
+            align-items: center;
+            animation: fadeInModal 0.3s ease;
+        }
+
+        @keyframes fadeInModal {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal-produto-content {
+            background: white;
+            border-radius: 16px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.4);
+            animation: slideUpModal 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+        }
+
+        @keyframes slideUpModal {
+            from { 
+                opacity: 0;
+                transform: translateY(50px) scale(0.95);
+            }
+            to { 
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .modal-produto-header {
+            background: linear-gradient(135deg, var(--asb-blue) 0%, #003d7a 100%);
+            color: white;
+            padding: 24px 28px;
+            border-radius: 16px 16px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-produto-header h2 {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .modal-close-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            font-size: 28px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            line-height: 1;
+        }
+
+        .modal-close-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: rotate(90deg);
+        }
+
+        .modal-produto-body {
+            padding: 28px;
+        }
+
+        .produto-info-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+
+        .produto-info-item {
+            background: #f8f9fa;
+            padding: 16px;
+            border-radius: 10px;
+            border: 1px solid #e9ecef;
+        }
+
+        .produto-info-item.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .produto-info-item.span-2 {
+            grid-column: span 2;
+        }
+
+        .produto-info-label {
+            font-size: 11px;
+            font-weight: 800;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        .produto-info-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .produto-info-value.destaque {
+            font-size: 24px;
+            color: var(--asb-blue);
+            font-weight: 800;
+        }
+
+        .produto-info-value.estoque-ok {
+            color: var(--asb-success);
+        }
+
+        .produto-info-value.estoque-baixo {
+            color: var(--asb-warning);
+        }
+
+        .produto-info-value.estoque-zero {
+            color: var(--asb-danger);
+        }
+
+        .produto-divider {
+            height: 2px;
+            background: linear-gradient(to right, transparent, #dee2e6, transparent);
+            margin: 24px 0;
+        }
+
+        .produto-calculos {
+            background: linear-gradient(135deg, #e8f4fd 0%, #f0f7ff 100%);
+            border: 2px solid #b8d4ee;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .produto-calculos h3 {
+            margin: 0 0 16px 0;
+            font-size: 14px;
+            color: var(--asb-blue);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .calculo-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(0, 86, 179, 0.1);
+            font-size: 14px;
+        }
+
+        .calculo-item:last-child {
+            border-bottom: none;
+            padding-top: 12px;
+            margin-top: 8px;
+            border-top: 2px solid rgba(0, 86, 179, 0.2);
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .modal-produto-footer {
+            padding: 20px 28px;
+            background: #f8f9fa;
+            border-radius: 0 0 16px 16px;
+        }
+
+        #modal-view-buttons,
+        #modal-edit-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        #modal-view-buttons .btn,
+        #modal-edit-buttons .btn {
+            padding: 12px 20px;
+            height: 44px;
+            font-size: 13px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        @media (max-width: 600px) {
+            .produto-info-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .produto-info-item.span-2 {
+                grid-column: 1;
+            }
+        }
+
     </style>
 </head>
 <body>
 
-<!-- AUTH -->
-<div id="tela-login" class="tela-autenticacao">
-    <div class="card-auth">
-        <h2>🚦 Anti-Multa Goiânia</h2>
-        <input type="email"    id="login-email" class="input-auth" placeholder="E-mail">
-        <input type="password" id="login-senha" class="input-auth" placeholder="Senha">
-        <button class="btn-auth" onclick="executarLoginTradicional()">ENTRAR NO PAINEL</button>
-        <button class="btn-auth-sec" onclick="alternarFluxoAuth('pin')">Usar PIN de 4 dígitos</button>
-        <button class="btn-auth-sec" onclick="alternarFluxoAuth('cadastro')">Criar nova conta</button>
+<div id="login-screen">
+    <div class="login-box">
+        <h2 style="margin-bottom:30px;">ASB <span style="color:var(--asb-blue); font-weight:300;">SISTEMA</span></h2>
+        <input type="text" id="user-input" placeholder="Usuário" style="margin-bottom:15px;" onkeydown="if(event.key==='Enter') document.getElementById('pass-input').focus()">
+        <input type="password" id="pass-input" placeholder="Senha" style="margin-bottom:25px;" onkeydown="if(event.key==='Enter') handleLogin()">
+        <button class="btn btn-add" id="btn-login" style="width: 100%; height:50px;" onclick="handleLogin()">ACESSAR GESTÃO</button>
+        <div id="login-status" style="font-size: 10px; color: #999; margin-top: 10px;">Verificando Nuvem...</div>
     </div>
 </div>
 
-<div id="tela-pin" class="tela-autenticacao" style="display:none;">
-    <div class="card-auth">
-        <h2>PIN Rápido</h2>
-        <input type="email"  id="pin-email" class="input-auth" placeholder="E-mail">
-        <input type="number" id="login-pin" class="input-auth" placeholder="PIN de 4 dígitos" inputmode="numeric">
-        <button class="btn-auth" onclick="executarLoginPorPIN()">VERIFICAR E ENTRAR</button>
-        <button class="btn-auth-sec" onclick="alternarFluxoAuth('login')">Voltar</button>
-    </div>
-</div>
-
-<div id="tela-cadastro" class="tela-autenticacao" style="display:none;">
-    <div class="card-auth">
-        <h2>Novo Cadastro</h2>
-        <input type="text"     id="cad-nome"     class="input-auth" placeholder="Nome Completo *">
-        <input type="email"    id="cad-email"    class="input-auth" placeholder="E-mail *">
-        <input type="tel"      id="cad-telefone" class="input-auth" placeholder="WhatsApp (opcional)">
-        <input type="password" id="cad-senha"    class="input-auth" placeholder="Senha *">
-        <input type="number"   id="cad-pin"      class="input-auth" placeholder="PIN de 4 dígitos *" inputmode="numeric">
-        <button class="btn-auth" onclick="executarCadastroMotorista()">CRIAR CONTA</button>
-        <button class="btn-auth-sec" onclick="alternarFluxoAuth('login')">Já tenho conta</button>
-    </div>
-</div>
-
-<!-- APP PRINCIPAL -->
-<div id="app-container">
-    <div id="painel-superior">
-        <div id="texto-status">SINALIZADOR DE VIA ACTIVO</div>
-        <div class="dashboard-container">
-            <div class="semaforo">
-                <div id="luz-vermelha" class="luz luz-vermelha"></div>
-                <div id="luz-amarela"  class="luz luz-amarela"></div>
-                <div id="luz-verde"    class="luz luz-verde ativa"></div>
+<div id="main-app">
+    <div class="container">
+        <header>
+            <div class="logo">
+                <h1>ASB <span>AUTOMAÇÃO</span> <span id="sync-indicator" class="sync-badge">Conectando...</span></h1>
+                <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                    Temperatura: <span id="temp-val">--°C</span>
+                    <button class="temp-refresh-btn no-print" onclick="refreshTemperature()">ATUALIZAR ⚙️</button>
+                </div>
             </div>
-            <div style="text-align:center;" onclick="liberarAudioNavegador()">
-                <span id="vel-atual">0</span><br><span class="unidade-medida">KM/H</span>
+            <div class="no-print">
+                <small id="welcome-msg" style="font-weight:bold; color:#666;"></small> 
+                <button class="btn" style="background:#eee; color:#333; font-size:10px; height:30px; margin-left:15px;" onclick="location.reload()">SAIR</button>
             </div>
-            <div class="bloco-limites">
-                <div class="limite-linha"><span>Radar:</span><span id="vel-maxima" class="limite-valor">--</span></div>
-                <div class="limite-linha"><span>Via:</span><span id="limite-via-display" class="limite-valor">--</span></div>
-                <div id="distancia-radar" style="font-size:11px;color:#ffea00;margin-top:4px;font-weight:bold;"></div>
+        </header>
+
+        <nav class="no-print">
+            <button class="nav-btn active" onclick="openTab('tab-estoque', this)">ESTOQUE</button>
+            <button class="nav-btn" onclick="openTab('tab-clientes', this)">CLIENTES</button>
+            <button class="nav-btn" onclick="openTab('tab-orcamento', this)">ORÇAMENTO</button>
+            <button class="nav-btn" onclick="openTab('tab-relatorios', this)">HISTÓRICO</button>
+            <button class="nav-btn" onclick="openTab('tab-movimentacao', this)">MOVIMENTAÇÃO</button>
+            <button id="nav-master" class="nav-btn" style="display:none" onclick="openTab('tab-master', this)">USUÁRIOS</button>
+            <button class="nav-btn" onclick="openTab('tab-config', this)">CONFIG</button>
+        </nav>
+
+        <section id="tab-estoque" class="section-panel active">
+            <div class="search-hero">
+                <button class="btn btn-new" onclick="mostrarFormEstoque()">NOVO PRODUTO</button>
+                <input type="text" id="search-est-input" placeholder="🔍 Buscar produto..." onkeyup="render()">
+                <button class="btn" style="background:var(--asb-dark)" onclick="render('all')">LISTAR TUDO</button>
+                <button class="btn" style="background:var(--asb-blue)" onclick="window.print()">🖨️ IMPRIMIR LISTA</button>
             </div>
-        </div>
-    </div>
-
-    <div id="conteudo-central">
-        <div id="mapa"></div>
-
-        <!-- BARRA DE BUSCA -->
-        <div id="barra-busca">
-            <input type="text" id="input-busca" placeholder="🔎 Buscar endereço...">
-            <button id="btn-buscar" onclick="buscarEndereco()">🔎</button>
-        </div>
-        <div id="resultados-busca"></div>
-
-        <!-- BOTÕES LATERAIS -->
-        <div id="btns-mapa-lateral">
-            <div class="btn-mapa-lat btn-limite-via-lat" onclick="abrirModal('modal-limite-via')">
-                🚧<br>LIMITE<br><span id="limite-via-btn">--</span>
+            <div class="form-grid" id="form-estoque">
+                <div class="field-group" style="grid-column: span 2;"><label>Produto / Descrição</label><input type="text" id="est-desc"></div>
+                <div class="field-group"><label>Unid.</label><input type="text" id="est-unid"></div>
+                <div class="field-group"><label>NCM</label><input type="text" id="est-ncm"></div>
+                <div class="field-group"><label>CFOP</label><input type="text" id="est-cfop"></div>
+                <div class="field-group"><label>CST</label><input type="text" id="est-cst"></div>
+                <div class="field-group"><label>Preço Compra (R$)</label><input type="number" id="est-compra" oninput="calcVenda()"></div>
+                <div class="field-group"><label>Markup (%)</label><input type="number" id="est-markup" oninput="calcVenda()"></div>
+                <div class="field-group"><label>IPI (%)</label><input type="number" id="est-ipi" oninput="calcVenda()"></div>
+                <div class="field-group"><label>ICMS (%)</label><input type="number" id="est-icms" oninput="calcVenda()"></div>
+                <div class="field-group"><label>Valor Final (Venda)</label><input type="number" id="est-val" step="0.01"></div>
+                <div class="field-group"><label>Qtd em Estoque</label><input type="number" id="est-qtd"></div>
+                <div class="form-actions-column">
+                    <button class="btn btn-add" id="btn-save-est" onclick="addEstoque()">SALVAR</button>
+                    <button class="btn btn-new" onclick="cancelarEdicao()">CANCELAR</button>
+                </div>
             </div>
-        </div>
-    </div>
-
-    <!-- MODAL FIXAR RADAR -->
-    <div id="modal-fixar-radar" class="modal-base">
-        <h4>📍 FIXAR RADAR — LIMITE</h4>
-        <div class="grid-vel">
-            <button class="btn-vel" onclick="publicarRadar(40)">40<br><small>km/h</small></button>
-            <button class="btn-vel" onclick="publicarRadar(50)">50<br><small>km/h</small></button>
-            <button class="btn-vel" onclick="publicarRadar(60)">60<br><small>km/h</small></button>
-            <button class="btn-vel" onclick="publicarRadar(80)">80<br><small>km/h</small></button>
-        </div>
-        <button class="btn-cancelar-modal" onclick="fecharModal('modal-fixar-radar')">❌ CANCELAR</button>
-    </div>
-
-    <!-- MODAL LIMITE DE VIA -->
-    <div id="modal-limite-via" class="modal-base">
-        <h4>🚧 LIMITE DESTA VIA</h4>
-        <p style="font-size:12px;color:#aaa;margin:0 0 12px;">Informe o limite desta rua/avenida para todos os usuários</p>
-        <div class="grid-vel" style="grid-template-columns:1fr 1fr 1fr;">
-            <button class="btn-vel" onclick="publicarLimiteVia(30)">30</button>
-            <button class="btn-vel" onclick="publicarLimiteVia(40)">40</button>
-            <button class="btn-vel" onclick="publicarLimiteVia(50)">50</button>
-            <button class="btn-vel" onclick="publicarLimiteVia(60)">60</button>
-            <button class="btn-vel" onclick="publicarLimiteVia(80)">80</button>
-            <button class="btn-vel" onclick="publicarLimiteVia(100)">100</button>
-        </div>
-        <button class="btn-cancelar-modal" onclick="fecharModal('modal-limite-via')">❌ CANCELAR</button>
-    </div>
-
-    <!-- POPUP EXCESSO -->
-    <div id="popup-velocidade">
-        <h1>⚠️ EXCESSO!</h1>
-        <p id="popup-msg"></p>
-        <p id="popup-detalhe"></p>
-        <button id="btn-fechar-popup" onclick="fecharPopupVelocidade()">OK, ENTENDIDO</button>
-    </div>
-
-    <!-- TELA MEUS RADARES -->
-    <div id="tela-meus-radares" class="tela-overlay">
-        <div class="topo-overlay">
-            <h3>📍 Meus Radares</h3>
-            <button class="btn-fechar-overlay" onclick="fecharTela('tela-meus-radares')">❌ VOLTAR</button>
-        </div>
-        <div class="corpo-overlay-scroll">
-            <table class="tabela-overlay">
-                <thead><tr><th>Localização</th><th>Limite</th><th>Data</th><th>Del</th></tr></thead>
-                <tbody id="corpo-meus-radares"></tbody>
+            <table id="table-estoque">
+                <thead>
+                    <tr><th>Descrição</th><th>Unid.</th><th>NCM</th><th>CFOP</th><th>CST</th><th>Vlr. Venda</th><th style="text-align: center;">Estoque</th><th class="no-print">Ações</th></tr>
+                </thead>
+                <tbody id="tbl-estoque-corpo"></tbody>
             </table>
-        </div>
-    </div>
+        </section>
 
-    <!-- TELA HISTÓRICO -->
-    <div id="tela-historico" class="tela-overlay">
-        <div class="topo-overlay">
-            <h3>📋 Histórico</h3>
-            <div style="display:flex;gap:8px;">
-                <button onclick="limparHistorico()" style="background:#c62828;color:white;border:none;padding:8px 10px;font-weight:bold;border-radius:6px;cursor:pointer;font-size:11px;">🗑️ LIMPAR</button>
-                <button class="btn-fechar-overlay" onclick="fecharTela('tela-historico')">❌ VOLTAR</button>
+        <section id="tab-clientes" class="section-panel">
+            <div class="search-hero">
+                <button class="btn btn-new" onclick="mostrarFormCliente()">NOVO CLIENTE</button>
+                <input type="text" id="search-cli-input" placeholder="🔍 Buscar cliente..." onkeyup="render()">
+                <button class="btn" style="background:var(--asb-dark)" onclick="render('all')">VER TODOS</button>
             </div>
-        </div>
-        <div class="corpo-overlay-scroll">
-            <table class="tabela-overlay">
-                <thead><tr><th>Local</th><th>Vel.</th><th>Limite</th><th>St.</th><th>Data/Hora</th></tr></thead>
-                <tbody id="corpo-historico"></tbody>
+            <div class="form-grid" id="form-cliente">
+                <div class="field-group"><label>Nome Fantasia</label><input type="text" id="cli-nome"></div>
+                <div class="field-group"><label>Razão Social</label><input type="text" id="cli-razao"></div>
+                <div class="field-group"><label>Tipo</label><select id="cli-tipo"><option>Física</option><option>Jurídica</option></select></div>
+                <div class="field-group"><label>CPF / CNPJ</label><input type="text" id="cli-doc"></div>
+                <div class="field-group"><label>WhatsApp</label><input type="text" id="cli-tel"></div>
+                <div class="field-group"><label>E-mail</label><input type="email" id="cli-email"></div>
+                <div class="field-group"><label>Endereço</label><input type="text" id="cli-end"></div>
+                <div class="field-group"><label>Cidade</label><input type="text" id="cli-cidade"></div>
+                <div class="field-group"><label>Estado</label><select id="cli-uf"><option>GO</option><option>DF</option><option>SP</option><option>MG</option><option>RJ</option><option>PR</option></select></div>
+                <div class="form-actions-column">
+                    <button class="btn btn-add" id="btn-save-cli" onclick="addCliente()">SALVAR</button>
+                    <button class="btn btn-new" onclick="cancelarEdicaoCliente()">CANCELAR</button>
+                </div>
+            </div>
+            <table id="table-clientes">
+                <thead><tr><th>Cliente / Doc</th><th>Contato</th><th>Cidade/UF</th><th>Última Compra</th><th class="no-print">Ações</th></tr></thead>
+                <tbody id="tbl-clientes-corpo"></tbody>
             </table>
-        </div>
-    </div>
+        </section>
 
-    <!-- TELA ADMIN -->
-    <div id="tela-admin" class="tela-overlay">
-        <div class="topo-overlay">
-            <h3>👑 Admin</h3>
-            <div style="display:flex;gap:6px;">
-                <button onclick="mostrarAbaAdmin('usuarios')" style="background:#0079f2;color:white;border:none;padding:6px 10px;border-radius:6px;font-size:11px;cursor:pointer;">👥 Usuários</button>
-                <button onclick="mostrarAbaAdmin('limites')"  style="background:#ffea00;color:#000;border:none;padding:6px 10px;border-radius:6px;font-size:11px;cursor:pointer;">🚧 Limites</button>
-                <button class="btn-fechar-overlay" onclick="fecharTela('tela-admin')">❌</button>
+        <section id="tab-orcamento" class="section-panel">
+            <!-- Linha 1: Cliente | Busca produto | Qtd | Inserir | Novo -->
+            <div class="form-grid no-print" style="display:grid; grid-template-columns: 2fr 3fr 70px auto auto;">
+                <select id="orc-cli-sel" onchange="calculateTotal()"><option value="">Selecionar Cliente</option></select>
+                <div class="orc-search-wrapper">
+                    <input type="text" id="orc-search" placeholder="🔍 Buscar produto no estoque..."
+                           oninput="filterItemsLive()" onkeyup="filterItemsLive()"
+                           onkeydown="orcSearchKeydown(event)" autocomplete="off">
+                    <div id="orc-resultados"></div>
+                </div>
+                <input type="number" id="orc-qtd-sel" value="1" min="1" placeholder="Qtd">
+                <button class="btn btn-add" onclick="addItemOrc()">➕ INSERIR</button>
+                <button class="btn btn-new" onclick="novoOrcamento()">🗒️ NOVO</button>
             </div>
-        </div>
-        <div id="resumo-admin" style="padding:10px 12px;background:#1a1a2e;font-size:12px;color:#aaa;"></div>
-        <div class="corpo-overlay-scroll">
-            <div id="aba-usuarios">
-                <table class="tabela-overlay">
-                    <thead><tr><th>Nome</th><th>E-mail</th><th>Tel.</th><th>Cadastro</th></tr></thead>
-                    <tbody id="corpo-admin-usuarios"></tbody>
+            <!-- Linha 2: Nº Orçamento | Acessórios | MO fixo | MO % -->
+            <div class="form-grid no-print" style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; background:#f0f7ff; border-color: #bcd9f5; align-items:end; gap:15px;">
+                <div class="field-group">
+                    <label>Nº Orçamento</label>
+                    <div class="orc-num-badge" id="orc-num-badge" style="height:38px; border-radius:6px; border:1px solid #ffc107; font-size:14px; justify-content:center; display:flex; align-items:center;">Nº —</div>
+                </div>
+                <div class="field-group"><label>Acessórios (%)</label><input type="number" id="orc-perc-acess" oninput="calculateTotal()"></div>
+                <div class="field-group"><label>Mão de Obra (R$)</label><input type="number" id="orc-mo-fixo" oninput="calculateTotal()"></div>
+                <div class="field-group"><label>Mão de Obra (%)</label><input type="number" id="orc-perc-mo" oninput="calculateTotal()"></div>
+            </div>
+            <div id="orc-area" class="hide-table">
+                <!-- Cabeçalho impresso -->
+                <div class="orc-cabecalho">
+                    <p class="empresa-nome">ASB AUTOMAÇÃO INDUSTRIAL</p>
+                    <p class="empresa-sub">Automação, Controle e Engenharia Elétrica</p>
+                </div>
+                <!-- Dados do cliente -->
+                <div class="orc-dados-cliente" id="orc-dados-cliente-bloco">
+                    <div class="orc-dc-header">
+                        <strong id="orc-dc-nome"></strong>
+                        <span id="orc-num-impresso" class="orc-dc-numdata"></span>
+                    </div>
+                    <span><b>CPF/CNPJ:</b> <span id="orc-dc-doc"></span></span>
+                    <span><b>E-mail:</b> <span id="orc-dc-email"></span></span>
+                    <span><b>Endereço:</b> <span id="orc-dc-end"></span></span>
+                    <span><b>Cidade/UF:</b> <span id="orc-dc-cidade"></span></span>
+                    <span><b>WhatsApp:</b> <span id="orc-dc-tel"></span></span>
+                </div>
+                <!-- Tabela de itens -->
+                <table>
+                    <thead><tr><th>QTD</th><th>DESCRIÇÃO TÉCNICA</th><th>UNITÁRIO</th><th>SUBTOTAL</th><th class="no-print">AÇÃO</th></tr></thead>
+                    <tbody id="orc-lista-corpo"></tbody>
                 </table>
+                <div class="summary-box">
+                    <div class="summary-row"><span>Materiais:</span><strong id="res-materiais">R$ 0.00</strong></div>
+                    <div class="summary-row"><span>Acessórios:</span><strong id="res-acessorios">R$ 0.00</strong></div>
+                    <div class="summary-row"><span>Mão de Obra:</span><strong id="res-mo">R$ 0.00</strong></div>
+                    <div class="summary-row" style="font-size:20px; border-top:2px solid #333; padding-top:15px; color:var(--asb-blue);"><span>TOTAL FINAL:</span><span id="res-total-final" style="font-weight:900;">R$ 0.00</span></div>
+                </div>
+                <div class="no-print">
+                    <button class="btn btn-print" onclick="window.print()">🖨️ GERAR PDF / IMPRIMIR</button>
+                    <button class="btn btn-add" style="width:100%; margin-top:10px; height:50px;" id="btn-finalizar-orc" onclick="finalizarERegistrar()">✅ FINALIZAR E SALVAR</button>
+                </div>
             </div>
-            <div id="aba-limites" style="display:none;">
-                <table class="tabela-overlay">
-                    <thead><tr><th>Descrição</th><th>Vel.</th><th>Por</th><th>Status</th><th>Ação</th></tr></thead>
-                    <tbody id="corpo-admin-limites"></tbody>
-                </table>
+        </section>
+
+        <section id="tab-relatorios" class="section-panel">
+            <div class="search-hero">
+                <input type="text" id="search-hist" placeholder="🔍 Filtrar por cliente ou Nº orçamento..." onkeyup="render()" style="flex:2">
+                <select id="filter-hist-status" onchange="render()" style="width:150px; flex:none;">
+                    <option value="">Todos os status</option>
+                    <option value="Pendente">Pendente</option>
+                    <option value="Aprovado">Aprovado</option>
+                    <option value="Cancelado">Cancelado</option>
+                </select>
             </div>
-        </div>
-    </div>
+            <table id="table-historico">
+                <thead><tr><th>Nº</th><th>Data</th><th>Cliente</th><th>Valor</th><th>Status</th><th class="no-print">Ações</th></tr></thead>
+                <tbody id="tbl-historico-corpo"></tbody>
+            </table>
+        </section>
 
-    <!-- PAINEL DE BOTÕES -->
-    <div id="painel-botoes">
-        <button class="btn-acao btn-fixar" onclick="abrirModal('modal-fixar-radar')">📍<br>FIXAR<br>RADAR</button>
-        <button class="btn-acao btn-meus"  onclick="abrirTela('tela-meus-radares')">🗂️<br>MEUS<br>RAD.</button>
-        <button class="btn-acao btn-hist"  onclick="abrirTela('tela-historico')">📋<br>HISTÓRICO</button>
-        <button class="btn-acao btn-pip"   onclick="alternarModoFlutuante()">🔲<br>FLUTUANTE</button>
-    </div>
+        <section id="tab-movimentacao" class="section-panel">
+            <h3>Log de Saídas de Estoque</h3>
+            <table>
+                <thead><tr><th>Data</th><th>Produto</th><th>Qtd</th><th>Destino (Cliente)</th></tr></thead>
+                <tbody id="tbl-log-corpo"></tbody>
+            </table>
+        </section>
 
-    <div id="info-gps">GPS: aguardando... | <span id="info-usuario"></span></div>
+        <section id="tab-master" class="section-panel">
+            <div class="form-grid" style="display:grid; grid-template-columns: 1fr 1fr 1fr;">
+                <input type="text" id="new-user" placeholder="Usuário">
+                <input type="password" id="new-pass" placeholder="Senha">
+                <button class="btn btn-add" onclick="addNewUser()">CADASTRAR</button>
+            </div>
+            <table>
+                <thead><tr><th>Usuário</th><th>Nível</th><th>Ações</th></tr></thead>
+                <tbody id="tbl-users-corpo"></tbody>
+            </table>
+        </section>
+
+        <section id="tab-config" class="section-panel">
+            <h3 style="margin-top:0;">Gestão de Backup e Nuvem</h3>
+            <div style="display:flex; flex-direction:column; gap:15px; max-width:400px;">
+                <button class="btn" style="background:var(--asb-success); height:55px;" onclick="forceRealtimeSync()">🔄 RECONECTAR CANAL DE DADOS</button>
+                <button class="btn" style="background:var(--asb-dark); height:45px;" onclick="exportDB()">💾 BAIXAR BACKUP LOCAL (.JSON)</button>
+                <div style="border: 2px dashed #ccc; padding: 20px; border-radius: 8px; text-align: center;">
+                    <label>IMPORTAR PARA NUVEM:</label>
+                    <input type="file" id="import-file" accept=".json" onchange="importDB(this)">
+                </div>
+                <button class="btn btn-del" style="height:45px;" onclick="limparHistoricoGeral()">⚠️ LIMPAR HISTÓRICO E LOGS</button>
+            </div>
+        </section>
+    </div>
 </div>
 
-<canvas id="canvas-pip" width="500" height="500"></canvas>
-<video id="video-pip" autoplay muted playsinline style="display:none;position:fixed;width:1px;height:1px;opacity:0.01;"></video>
+<!-- Modal de Confirmação (já existente) -->
+<div id="modal-confirmacao">
+    <div class="modal-box">
+        <p id="modal-msg"></p>
+        <div class="modal-btns">
+            <button id="modal-btn-sim">SIM, CONFIRMAR</button>
+            <button id="modal-btn-nao">CANCELAR</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Detalhes do Produto -->
+<div id="modal-produto" onclick="if(event.target.id === 'modal-produto') fecharModalProduto()">
+    <div class="modal-produto-content">
+        <div class="modal-produto-header">
+            <h2>📦 Detalhes do Produto</h2>
+            <button class="modal-close-btn" onclick="fecharModalProduto()">×</button>
+        </div>
+        
+        <div class="modal-produto-body">
+            <!-- Modo Visualização -->
+            <div id="modal-view-mode">
+                <div class="produto-info-grid">
+                    <div class="produto-info-item span-2">
+                        <span class="produto-info-label">Descrição do Produto</span>
+                        <div class="produto-info-value" id="modal-prod-desc">--</div>
+                    </div>
+                    
+                    <div class="produto-info-item">
+                        <span class="produto-info-label">Estoque</span>
+                        <div class="produto-info-value" id="modal-prod-qtd">--</div>
+                    </div>
+                    
+                    <div class="produto-info-item">
+                        <span class="produto-info-label">Unidade</span>
+                        <div class="produto-info-value" id="modal-prod-unid">--</div>
+                    </div>
+                    
+                    <div class="produto-info-item">
+                        <span class="produto-info-label">NCM</span>
+                        <div class="produto-info-value" id="modal-prod-ncm">--</div>
+                    </div>
+                    
+                    <div class="produto-info-item">
+                        <span class="produto-info-label">CFOP</span>
+                        <div class="produto-info-value" id="modal-prod-cfop">--</div>
+                    </div>
+                    
+                    <div class="produto-info-item">
+                        <span class="produto-info-label">CST</span>
+                        <div class="produto-info-value" id="modal-prod-cst">--</div>
+                    </div>
+                    
+                    <div class="produto-info-item span-2">
+                        <span class="produto-info-label">💰 Valor de Venda</span>
+                        <div class="produto-info-value destaque" id="modal-prod-val">R$ 0,00</div>
+                    </div>
+                </div>
+                
+                <div class="produto-divider"></div>
+                
+                <div class="produto-calculos">
+                    <h3>💡 Composição do Preço</h3>
+                    <div class="calculo-item">
+                        <span>Preço de Compra:</span>
+                        <strong id="modal-calc-compra">R$ 0,00</strong>
+                    </div>
+                    <div class="calculo-item">
+                        <span>Markup (<span id="modal-calc-markup-perc">0</span>%):</span>
+                        <strong id="modal-calc-markup-val">R$ 0,00</strong>
+                    </div>
+                    <div class="calculo-item">
+                        <span>IPI (<span id="modal-calc-ipi-perc">0</span>%):</span>
+                        <strong id="modal-calc-ipi-val">R$ 0,00</strong>
+                    </div>
+                    <div class="calculo-item">
+                        <span>ICMS (<span id="modal-calc-icms-perc">0</span>%):</span>
+                        <strong id="modal-calc-icms-val">R$ 0,00</strong>
+                    </div>
+                    <div class="calculo-item">
+                        <span>💰 Preço Final de Venda:</span>
+                        <strong id="modal-calc-total">R$ 0,00</strong>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modo Edição -->
+            <div id="modal-edit-mode" style="display: none;">
+                <div class="produto-info-grid">
+                    <div class="produto-info-item span-2">
+                        <span class="produto-info-label">Descrição do Produto</span>
+                        <input type="text" id="modal-edit-desc" style="margin-top: 8px;">
+                    </div>
+                    
+                    <div class="produto-info-item">
+                        <span class="produto-info-label">Estoque</span>
+                        <input type="number" id="modal-edit-qtd" style="margin-top: 8px;">
+                    </div>
+                    
+                    <div class="produto-info-item">
+                        <span class="produto-info-label">Unidade</span>
+                        <input type="text" id="modal-edit-unid" style="margin-top: 8px;">
+                    </div>
+                    
+                    <div class="produto-info-item">
+                        <span class="produto-info-label">NCM</span>
+                        <input type="text" id="modal-edit-ncm" style="margin-top: 8px;">
+                    </div>
+                    
+                    <div class="produto-info-item">
+                        <span class="produto-info-label">CFOP</span>
+                        <input type="text" id="modal-edit-cfop" style="margin-top: 8px;">
+                    </div>
+                    
+                    <div class="produto-info-item">
+                        <span class="produto-info-label">CST</span>
+                        <input type="text" id="modal-edit-cst" style="margin-top: 8px;">
+                    </div>
+                </div>
+                
+                <div class="produto-divider"></div>
+                
+                <div class="produto-calculos">
+                    <h3>💡 Cálculo do Preço de Venda</h3>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 16px;">
+                        <div class="produto-info-item">
+                            <span class="produto-info-label">Preço de Compra (R$)</span>
+                            <input type="number" id="modal-edit-compra" step="0.01" oninput="calcVendaModal()" style="margin-top: 8px;">
+                        </div>
+                        <div class="produto-info-item">
+                            <span class="produto-info-label">Markup (%)</span>
+                            <input type="number" id="modal-edit-markup" step="0.01" oninput="calcVendaModal()" style="margin-top: 8px;">
+                        </div>
+                        <div class="produto-info-item">
+                            <span class="produto-info-label">IPI (%)</span>
+                            <input type="number" id="modal-edit-ipi" step="0.01" oninput="calcVendaModal()" style="margin-top: 8px;">
+                        </div>
+                        <div class="produto-info-item">
+                            <span class="produto-info-label">ICMS (%)</span>
+                            <input type="number" id="modal-edit-icms" step="0.01" oninput="calcVendaModal()" style="margin-top: 8px;">
+                        </div>
+                    </div>
+                    <div class="produto-info-item" style="background: linear-gradient(135deg, #e8f4fd 0%, #f0f7ff 100%); border: 2px solid #0056b3;">
+                        <span class="produto-info-label">💰 Valor Final de Venda (R$)</span>
+                        <input type="number" id="modal-edit-val" step="0.01" style="margin-top: 8px; font-size: 18px; font-weight: 700; color: var(--asb-blue);">
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="modal-produto-footer">
+            <!-- Botões Modo Visualização -->
+            <div id="modal-view-buttons">
+                <button class="btn btn-new" style="min-width: 120px;" onclick="fecharModalProduto()">Fechar</button>
+                <button class="btn btn-edit" style="min-width: 160px;" onclick="ativarModoEdicaoModal()">✏️ Editar Produto</button>
+            </div>
+            <!-- Botões Modo Edição -->
+            <div id="modal-edit-buttons" style="display: none;">
+                <button class="btn btn-new" style="min-width: 120px;" onclick="cancelarEdicaoModal()">Cancelar</button>
+                <button class="btn btn-add" style="min-width: 180px;" onclick="salvarEdicaoModal()">💾 Salvar Alterações</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script>
-    const API_URL = window.location.origin;
-    let tokenLocal = localStorage.getItem('asb_jwt_token');
-    let usuarioAtual = null;
+    const firebaseConfig = {
+        apiKey: "AIzaSyA8rHSh4HW_bSVzccYPb49aQJ5QlvakAKo",
+        authDomain: "asb-sistema.firebaseapp.com",
+        databaseURL: "https://asb-sistema-default-rtdb.firebaseio.com",
+        projectId: "asb-sistema",
+        storageBucket: "asb-sistema.firebasestorage.app",
+        messagingSenderId: "330568541447",
+        appId: "1:330568541447:web:93017cef6d072bbc2951a2"
+    };
 
-    let listaRadares = [];
-    let listaLimitesVia = [];
-    let historicoPassagens = JSON.parse(localStorage.getItem('asb_historico') || '[]');
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+    const DB_PATH = 'asb_cloud_master_v81';
+    let db = { users:[{user:'admin', pass:'asb123', level:'master'}], estoque:[], clientes:[], orc_temp:[], historico:[], movimentacoes:[] };
+    
+    let editingEstoqueIndex = null;
+    let editingClienteIndex = null;
+    let currentEditingOrcId = null;
+    let currentOrcNumero = null;   // número gerado para o orçamento ativo
+    let firebaseInitialized = false;
 
-    const mapa = L.map('mapa', { zoomControl:false }).setView([-16.6869, -49.2648], 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19 }).addTo(mapa);
-    L.control.zoom({ position:'bottomright' }).addTo(mapa);
+    function initCloud() {
+        console.log('🔥 Iniciando Firebase...');
+        
+        // Atualiza status na tela de login
+        const loginStatus = document.getElementById('login-status');
+        if(loginStatus) loginStatus.innerText = 'Conectando...';
+        
+        // Carrega dados DO FIREBASE
+        database.ref(DB_PATH).once('value')
+            .then((snapshot) => {
+                const val = snapshot.val();
+                if(val) {
+                    console.log('✅ Dados carregados!');
+                    db = val;
+                    
+                    // Garante que arrays existem
+                    if(!db.users) db.users = [{user:'admin', pass:'asb123', level:'master'}];
+                    if(!db.movimentacoes) db.movimentacoes = [];
+                    if(!db.historico) db.historico = [];
+                    if(!db.estoque) db.estoque = [];
+                    if(!db.clientes) db.clientes = [];
+                    
+                    // Atualiza indicadores
+                    const syncEl = document.getElementById('sync-indicator');
+                    if(syncEl) {
+                        syncEl.innerText = "Nuvem Ativa";
+                        syncEl.className = 'sync-badge sync-online';
+                    }
+                    
+                    if(loginStatus) {
+                        loginStatus.innerText = '✅ Pronto!';
+                        loginStatus.style.color = '#28a745';
+                    }
+                    
+                    render();
+                } else { 
+                    console.log('Firebase vazio, criando...');
+                    if(loginStatus) loginStatus.innerText = 'Criando banco...';
+                    save(); 
+                }
+            })
+            .catch((error) => {
+                console.error('❌ ERRO Firebase:', error);
+                alert('ERRO ao conectar!\n' + error.message);
+                if(loginStatus) {
+                    loginStatus.innerText = '❌ Erro: ' + error.message;
+                    loginStatus.style.color = '#dc3545';
+                }
+            });
+    }
+    initCloud();
 
-    let marcadorMotorista = null;
-    let minhaLatAtual = 0, minhaLonAtual = 0;
-    let velocidadeGlobal = 0, limiteGlobal = 0;
-    let statusTextoGlobal = 'VIA MONITORADA';
-    let audioCtx = null, bipIntervalId = null;
-    let radaresDentroDoRaio = new Set();
-    let limitesDentroDoRaio = new Set();
-    let popupAtivo = false;
-    let ultimoExcesso = 0;
-    let marcadorDestino = null;
-
-    const iconeMotorista = L.divIcon({ html:'🚗', className:'', iconSize:[30,30], iconAnchor:[15,15] });
-
-    // =====================================================================
-    // AUTH
-    // =====================================================================
-    function alternarFluxoAuth(tela) {
-        ['login','pin','cadastro'].forEach(t =>
-            document.getElementById(`tela-${t}`).style.display = t===tela ? 'flex' : 'none'
-        );
-        if (tela==='pin') document.getElementById('pin-email').value = document.getElementById('login-email').value || '';
+    function save() { 
+        console.log('💾 Salvando no Firebase...');
+        database.ref(DB_PATH).set(db).then(() => {
+            console.log('✅ Salvo com sucesso!');
+        }).catch(e => {
+            console.error("❌ Erro ao salvar:", e);
+        });
     }
 
-    async function checarAutenticacaoExistente() {
-        if (!tokenLocal) return;
-        try {
-            const r = await fetch(`${API_URL}/api/auth/me`, { headers:{'Authorization':`Bearer ${tokenLocal}`} });
-            if (r.ok) { usuarioAtual = await r.json(); entrarNoAplicativo(); }
-            else limparTokens();
-        } catch { if (tokenLocal) entrarNoAplicativo(); }
-    }
+    // ==================== FUNÇÕES DO MODAL DE DETALHES DO PRODUTO ====================
+    let produtoAtualModal = null;
 
-    function limparTokens() {
-        localStorage.removeItem('asb_jwt_token');
-        tokenLocal = null;
-        alternarFluxoAuth('login');
-    }
-
-    function entrarNoAplicativo() {
-        ['tela-login','tela-pin','tela-cadastro'].forEach(t => document.getElementById(t).style.display='none');
-        document.getElementById('app-container').style.display = 'flex';
-        mapa.invalidateSize();
-        if (usuarioAtual) {
-            document.getElementById('info-usuario').innerText = usuarioAtual.nome + (usuarioAtual.is_admin ? ' 👑' : '');
-            if (usuarioAtual.is_admin) adicionarBotaoAdmin();
+    function abrirModalProduto(idx) {
+        if (!db.estoque || !db.estoque[idx]) return;
+        
+        const produto = db.estoque[idx];
+        produtoAtualModal = idx;
+        
+        // Preencher informações básicas
+        document.getElementById('modal-prod-desc').textContent = produto.desc || '--';
+        document.getElementById('modal-prod-unid').textContent = produto.unid || '--';
+        document.getElementById('modal-prod-ncm').textContent = produto.ncm || '--';
+        document.getElementById('modal-prod-cfop').textContent = produto.cfop || '--';
+        document.getElementById('modal-prod-cst').textContent = produto.cst || '--';
+        document.getElementById('modal-prod-val').textContent = `R$ ${parseFloat(produto.val || 0).toFixed(2)}`;
+        
+        // Estoque com indicador de cor
+        const qtdElement = document.getElementById('modal-prod-qtd');
+        qtdElement.textContent = produto.qtd || 0;
+        qtdElement.className = 'produto-info-value';
+        if (produto.qtd > 10) {
+            qtdElement.classList.add('estoque-ok');
+        } else if (produto.qtd > 0) {
+            qtdElement.classList.add('estoque-baixo');
+        } else {
+            qtdElement.classList.add('estoque-zero');
         }
-        sincronizarTudo();
-        inicializarRastreamentoGPS();
-        renderizarHistorico();
-        prepararPip();
+        
+        // Composição do preço
+        const compra = parseFloat(produto.compra) || 0;
+        const markup = parseFloat(produto.markup) || 0;
+        const ipi = parseFloat(produto.ipi) || 0;
+        const icms = parseFloat(produto.icms) || 0;
+        
+        const precoComMarkup = compra + (compra * (markup / 100));
+        const valorMarkup = compra * (markup / 100);
+        const valorIPI = precoComMarkup * (ipi / 100);
+        const valorICMS = precoComMarkup * (icms / 100);
+        const total = precoComMarkup + valorIPI + valorICMS;
+        
+        document.getElementById('modal-calc-compra').textContent = `R$ ${compra.toFixed(2)}`;
+        document.getElementById('modal-calc-markup-perc').textContent = markup.toFixed(1);
+        document.getElementById('modal-calc-markup-val').textContent = `R$ ${valorMarkup.toFixed(2)}`;
+        document.getElementById('modal-calc-ipi-perc').textContent = ipi.toFixed(1);
+        document.getElementById('modal-calc-ipi-val').textContent = `R$ ${valorIPI.toFixed(2)}`;
+        document.getElementById('modal-calc-icms-perc').textContent = icms.toFixed(1);
+        document.getElementById('modal-calc-icms-val').textContent = `R$ ${valorICMS.toFixed(2)}`;
+        document.getElementById('modal-calc-total').textContent = `R$ ${total.toFixed(2)}`;
+        
+        // Mostrar modal
+        document.getElementById('modal-produto').style.display = 'flex';
+        document.body.style.overflow = 'hidden'; // Previne scroll do body
     }
 
-    function adicionarBotaoAdmin() {
-        if (document.getElementById('btn-admin')) return;
-        const btn = document.createElement('button');
-        btn.id = 'btn-admin';
-        btn.className = 'btn-acao';
-        btn.style.background = '#b71c1c';
-        btn.innerHTML = '👑<br>ADMIN';
-        btn.onclick = () => abrirTela('tela-admin');
-        document.getElementById('painel-botoes').appendChild(btn);
+    function fecharModalProduto() {
+        document.getElementById('modal-produto').style.display = 'none';
+        document.body.style.overflow = ''; // Restaura scroll
+        produtoAtualModal = null;
+        // Voltar para modo visualização
+        document.getElementById('modal-view-mode').style.display = 'block';
+        document.getElementById('modal-edit-mode').style.display = 'none';
+        document.getElementById('modal-view-buttons').style.display = 'flex';
+        document.getElementById('modal-edit-buttons').style.display = 'none';
     }
 
-    async function executarLoginTradicional() {
-        const email = document.getElementById('login-email').value;
-        const senha = document.getElementById('login-senha').value;
-        try {
-            const r = await fetch(`${API_URL}/api/auth/login`, {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({email, senha})
-            });
-            const d = await r.json();
-            if (r.ok) { localStorage.setItem('asb_jwt_token', d.token); tokenLocal=d.token; usuarioAtual=d.user; entrarNoAplicativo(); }
-            else alert(d.error);
-        } catch { alert('Erro de conexão.'); }
+    function ativarModoEdicaoModal() {
+        if (produtoAtualModal === null) return;
+        const produto = db.estoque[produtoAtualModal];
+        
+        // Preencher campos de edição
+        document.getElementById('modal-edit-desc').value = produto.desc || '';
+        document.getElementById('modal-edit-unid').value = produto.unid || '';
+        document.getElementById('modal-edit-qtd').value = produto.qtd || 0;
+        document.getElementById('modal-edit-ncm').value = produto.ncm || '';
+        document.getElementById('modal-edit-cfop').value = produto.cfop || '';
+        document.getElementById('modal-edit-cst').value = produto.cst || '';
+        document.getElementById('modal-edit-compra').value = produto.compra || 0;
+        document.getElementById('modal-edit-markup').value = produto.markup || 0;
+        document.getElementById('modal-edit-ipi').value = produto.ipi || 0;
+        document.getElementById('modal-edit-icms').value = produto.icms || 0;
+        document.getElementById('modal-edit-val').value = produto.val || 0;
+        
+        // Alternar para modo edição
+        document.getElementById('modal-view-mode').style.display = 'none';
+        document.getElementById('modal-edit-mode').style.display = 'block';
+        document.getElementById('modal-view-buttons').style.display = 'none';
+        document.getElementById('modal-edit-buttons').style.display = 'flex';
+        
+        // Focar no primeiro campo
+        document.getElementById('modal-edit-desc').focus();
     }
 
-    async function executarLoginPorPIN() {
-        const email = document.getElementById('pin-email').value;
-        const pin   = document.getElementById('login-pin').value;
-        try {
-            const r = await fetch(`${API_URL}/api/auth/pin`, {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({email, pin})
-            });
-            const d = await r.json();
-            if (r.ok) { localStorage.setItem('asb_jwt_token', d.token); tokenLocal=d.token; usuarioAtual=d.user; entrarNoAplicativo(); }
-            else alert(d.error);
-        } catch { alert('Erro ao validar PIN.'); }
+    function cancelarEdicaoModal() {
+        // Voltar para modo visualização
+        document.getElementById('modal-view-mode').style.display = 'block';
+        document.getElementById('modal-edit-mode').style.display = 'none';
+        document.getElementById('modal-view-buttons').style.display = 'flex';
+        document.getElementById('modal-edit-buttons').style.display = 'none';
     }
 
-    async function executarCadastroMotorista() {
-        const nome     = document.getElementById('cad-nome').value;
-        const email    = document.getElementById('cad-email').value;
-        const telefone = document.getElementById('cad-telefone').value;
-        const senha    = document.getElementById('cad-senha').value;
-        const pin      = document.getElementById('cad-pin').value;
-        try {
-            const r = await fetch(`${API_URL}/api/auth/register`, {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({nome, email, telefone, senha, pin})
-            });
-            const d = await r.json();
-            if (r.ok) { localStorage.setItem('asb_jwt_token', d.token); tokenLocal=d.token; usuarioAtual=d.user; entrarNoAplicativo(); }
-            else alert(d.error);
-        } catch { alert('Erro no cadastro.'); }
+    function calcVendaModal() {
+        const compra = parseFloat(document.getElementById('modal-edit-compra').value) || 0;
+        const mark = parseFloat(document.getElementById('modal-edit-markup').value) || 0;
+        const ipi = parseFloat(document.getElementById('modal-edit-ipi').value) || 0;
+        const icms = parseFloat(document.getElementById('modal-edit-icms').value) || 0;
+        
+        const precoComMarkup = compra + (compra * (mark / 100));
+        const total = precoComMarkup + (precoComMarkup * (ipi / 100)) + (precoComMarkup * (icms / 100));
+        
+        document.getElementById('modal-edit-val').value = total.toFixed(2);
     }
 
-    // =====================================================================
-    // SINCRONISMO
-    // =====================================================================
-    async function sincronizarTudo() {
-        await Promise.all([sincronizarRadares(), sincronizarLimitesVia()]);
-        setTimeout(sincronizarTudo, 30000);
-    }
-
-    async function sincronizarRadares() {
-        try {
-            const r = await fetch(`${API_URL}/api/radares`);
-            if (r.ok) { listaRadares = await r.json(); plotarRadaresNoMapa(); renderizarMeusRadares(); }
-        } catch {}
-    }
-
-    async function sincronizarLimitesVia() {
-        try {
-            const r = await fetch(`${API_URL}/api/limites-via`);
-            if (r.ok) { listaLimitesVia = await r.json(); plotarLimitesNoMapa(); }
-        } catch {}
-    }
-
-    // =====================================================================
-    // MAPA — RADARES
-    // =====================================================================
-    function plotarRadaresNoMapa() {
-        mapa.eachLayer(l => { if (l._isRadar) mapa.removeLayer(l); });
-        listaRadares.forEach(radar => {
-            const souDono = usuarioAtual && radar.user_id === usuarioAtual.id;
-            const cor = souDono ? '#0079f2' : '#ff1744';
-            const c = L.circle([radar.lat, radar.lon], { color:cor, fillColor:cor, fillOpacity:0.15, radius:100 }).addTo(mapa);
-            c._isRadar = true;
-            const p = L.circleMarker([radar.lat, radar.lon], { radius:7, color:'#fff', fillColor:cor, fillOpacity:1 })
-                .addTo(mapa).bindPopup(`<b>${radar.local}</b><br>Limite: <b>${radar.velocidade} km/h</b><br>Por: ${radar.nome_usuario||'usuário'}`);
-            p._isRadar = true;
-        });
-    }
-
-    // =====================================================================
-    // MAPA — LIMITES DE VIA
-    // =====================================================================
-    function plotarLimitesNoMapa() {
-        mapa.eachLayer(l => { if (l._isLimite) mapa.removeLayer(l); });
-        listaLimitesVia.forEach(lv => {
-            const cor = lv.validado ? '#ffea00' : '#888';
-            const icone = L.divIcon({
-                html: `<div style="background:${cor};color:#000;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:11px;border:2px solid #fff;">${lv.velocidade}</div>`,
-                className: '', iconSize:[28,28], iconAnchor:[14,14]
-            });
-            const m = L.marker([lv.lat, lv.lon], { icon:icone }).addTo(mapa)
-                .bindPopup(`🚧 <b>Limite: ${lv.velocidade} km/h</b><br>${lv.descricao}<br>Por: ${lv.nome_usuario||'usuário'}<br>${lv.validado ? '✅ Validado' : '⏳ Aguardando validação'}`);
-            m._isLimite = true;
-        });
-    }
-
-    // =====================================================================
-    // FIXAR RADAR
-    // =====================================================================
-    function abrirModal(id) {
-        if (id==='modal-fixar-radar' && minhaLatAtual===0) return alert('Aguardando GPS.');
-        if (id==='modal-limite-via' && minhaLatAtual===0) return alert('Aguardando GPS.');
-        document.getElementById(id).style.display = 'block';
-    }
-    function fecharModal(id) { document.getElementById(id).style.display = 'none'; }
-
-    async function publicarRadar(velocidade) {
-        const agora = new Date();
-        try {
-            const r = await fetch(`${API_URL}/api/radares`, {
-                method:'POST',
-                headers:{'Content-Type':'application/json','Authorization':`Bearer ${tokenLocal}`},
-                body: JSON.stringify({
-                    local: `Radar ${velocidade}km/h — ${agora.toLocaleTimeString('pt-BR')}`,
-                    lat: minhaLatAtual, lon: minhaLonAtual, velocidade
-                })
-            });
-            if (r.ok) { fecharModal('modal-fixar-radar'); await sincronizarRadares(); }
-            else { const e = await r.json(); alert(e.error); }
-        } catch { alert('Erro ao publicar radar.'); }
-    }
-
-    async function removerRadar(id) {
-        if (!confirm('Remover este radar?')) return;
-        try {
-            const r = await fetch(`${API_URL}/api/radares/${id}`, {
-                method:'DELETE', headers:{'Authorization':`Bearer ${tokenLocal}`}
-            });
-            if (r.ok) await sincronizarRadares();
-        } catch { alert('Erro ao remover.'); }
-    }
-
-    // =====================================================================
-    // LIMITES DE VIA — publicar
-    // =====================================================================
-    async function publicarLimiteVia(velocidade) {
-        const agora = new Date();
-        try {
-            const r = await fetch(`${API_URL}/api/limites-via`, {
-                method:'POST',
-                headers:{'Content-Type':'application/json','Authorization':`Bearer ${tokenLocal}`},
-                body: JSON.stringify({
-                    descricao: `Limite ${velocidade}km/h — ${agora.toLocaleTimeString('pt-BR')}`,
-                    lat: minhaLatAtual, lon: minhaLonAtual, velocidade
-                })
-            });
-            if (r.ok) {
-                fecharModal('modal-limite-via');
-                document.getElementById('limite-via-btn').innerText = `${velocidade}`;
-                document.getElementById('limite-via-display').innerText = velocidade;
-                await sincronizarLimitesVia();
-                alert(`✅ Limite de ${velocidade} km/h registrado!\nAguarda validação do admin.`);
-            } else { const e = await r.json(); alert(e.error); }
-        } catch { alert('Erro ao salvar limite.'); }
-    }
-
-    async function removerLimite(id) {
-        if (!confirm('Remover este limite?')) return;
-        try {
-            const r = await fetch(`${API_URL}/api/limites-via/${id}`, {
-                method:'DELETE', headers:{'Authorization':`Bearer ${tokenLocal}`}
-            });
-            if (r.ok) await sincronizarLimitesVia();
-        } catch { alert('Erro ao remover.'); }
-    }
-
-    async function validarLimite(id) {
-        try {
-            const r = await fetch(`${API_URL}/api/limites-via/${id}/validar`, {
-                method:'PATCH', headers:{'Authorization':`Bearer ${tokenLocal}`}
-            });
-            if (r.ok) { await sincronizarLimitesVia(); carregarAdminLimites(); }
-        } catch { alert('Erro ao validar.'); }
-    }
-
-    // =====================================================================
-    // MEUS RADARES
-    // =====================================================================
-    function renderizarMeusRadares() {
-        const tbody = document.getElementById('corpo-meus-radares');
-        tbody.innerHTML = '';
-        const meus = listaRadares.filter(r => usuarioAtual && r.user_id === usuarioAtual.id);
-        if (!meus.length) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#888;padding:20px;">Nenhum radar fixado.</td></tr>';
+    function salvarEdicaoModal() {
+        if (produtoAtualModal === null) return;
+        
+        const item = {
+            desc: document.getElementById('modal-edit-desc').value.trim(),
+            unid: document.getElementById('modal-edit-unid').value.trim(),
+            ncm: document.getElementById('modal-edit-ncm').value.trim(),
+            cfop: document.getElementById('modal-edit-cfop').value.trim(),
+            cst: document.getElementById('modal-edit-cst').value.trim(),
+            compra: parseFloat(document.getElementById('modal-edit-compra').value) || 0,
+            markup: parseFloat(document.getElementById('modal-edit-markup').value) || 0,
+            ipi: parseFloat(document.getElementById('modal-edit-ipi').value) || 0,
+            icms: parseFloat(document.getElementById('modal-edit-icms').value) || 0,
+            val: parseFloat(document.getElementById('modal-edit-val').value) || 0,
+            qtd: parseInt(document.getElementById('modal-edit-qtd').value) || 0
+        };
+        
+        if (!item.desc) {
+            alert('⚠️ A descrição do produto é obrigatória!');
             return;
         }
-        meus.forEach(r => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td style="font-size:11px;">${r.local}</td><td>${r.velocidade}</td>
-                <td>${new Date(r.criado_em).toLocaleDateString('pt-BR')}</td>
-                <td><button class="btn-deletar" onclick="removerRadar(${r.id})">🗑️</button></td>`;
-            tbody.appendChild(tr);
-        });
+        
+        // Atualizar produto
+        db.estoque[produtoAtualModal] = item;
+        save();
+        
+        // Reabrir modal em modo visualização com os dados atualizados
+        const idx = produtoAtualModal;
+        fecharModalProduto();
+        setTimeout(() => abrirModalProduto(idx), 100);
+        
+        mostrarModalInfo('✅ Produto atualizado com sucesso!');
     }
 
-    // =====================================================================
-    // HISTÓRICO
-    // =====================================================================
-    function registrarPassagem(radar, vel) {
-        historicoPassagens.unshift({
-            local: radar.local || radar.descricao, velocidade: vel,
-            limite: radar.velocidade,
-            dataHora: new Date().toLocaleString('pt-BR'),
-            status: vel > radar.velocidade ? 'vermelho' : vel >= radar.velocidade*0.9 ? 'amarelo' : 'verde'
-        });
-        if (historicoPassagens.length > 200) historicoPassagens.pop();
-        localStorage.setItem('asb_historico', JSON.stringify(historicoPassagens));
-        renderizarHistorico();
-    }
-
-    function renderizarHistorico() {
-        const tbody = document.getElementById('corpo-historico');
-        tbody.innerHTML = '';
-        if (!historicoPassagens.length) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;padding:20px;">Nenhuma passagem registrada.</td></tr>';
-            return;
+    function editarProdutoDoModal() {
+        if (produtoAtualModal !== null) {
+            fecharModalProduto();
+            editEstItem(produtoAtualModal);
         }
-        historicoPassagens.forEach(p => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td style="font-size:11px;">${p.local}</td>
-                <td class="hist-${p.status}">${p.velocidade}</td>
-                <td>${p.limite}</td>
-                <td>${p.status==='verde'?'🟢':p.status==='amarelo'?'🟡':'🔴'}</td>
-                <td style="font-size:10px;">${p.dataHora}</td>`;
-            tbody.appendChild(tr);
-        });
     }
 
-    function limparHistorico() {
-        if (!confirm('Apagar todo o histórico?')) return;
-        historicoPassagens = [];
-        localStorage.removeItem('asb_historico');
-        renderizarHistorico();
-    }
-
-    // =====================================================================
-    // ADMIN
-    // =====================================================================
-    function mostrarAbaAdmin(aba) {
-        document.getElementById('aba-usuarios').style.display = aba==='usuarios' ? 'block' : 'none';
-        document.getElementById('aba-limites').style.display  = aba==='limites'  ? 'block' : 'none';
-        if (aba==='limites') carregarAdminLimites();
-    }
-
-    async function carregarUsuariosAdmin() {
-        try {
-            const r = await fetch(`${API_URL}/api/admin/usuarios`, { headers:{'Authorization':`Bearer ${tokenLocal}`} });
-            if (!r.ok) return;
-            const usuarios = await r.json();
-            document.getElementById('resumo-admin').innerHTML =
-                `👥 <b style="color:#ffea00;">${usuarios.length} usuários</b> | 📍 ${listaRadares.length} radares | 🚧 ${listaLimitesVia.length} limites de via`;
-            const tbody = document.getElementById('corpo-admin-usuarios');
-            tbody.innerHTML = '';
-            usuarios.forEach(u => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${u.nome}${u.is_admin?' <span class="badge-admin">ADMIN</span>':''}</td>
-                    <td style="font-size:10px;">${u.email}</td>
-                    <td>${u.telefone||'--'}</td>
-                    <td style="font-size:10px;">${new Date(u.criado_em).toLocaleDateString('pt-BR')}</td>`;
-                tbody.appendChild(tr);
-            });
-        } catch {}
-    }
-
-    function carregarAdminLimites() {
-        const tbody = document.getElementById('corpo-admin-limites');
-        tbody.innerHTML = '';
-        if (!listaLimitesVia.length) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;padding:20px;">Nenhum limite cadastrado.</td></tr>';
-            return;
+    // Fechar modal com ESC
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            fecharModalProduto();
         }
-        listaLimitesVia.forEach(lv => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td style="font-size:11px;">${lv.descricao}</td>
-                <td>${lv.velocidade}</td>
-                <td style="font-size:10px;">${lv.nome_usuario||'--'}</td>
-                <td>${lv.validado ? '<span class="badge-validado">✅</span>' : '<span class="badge-pendente">⏳</span>'}</td>
-                <td style="display:flex;gap:4px;">
-                    ${!lv.validado ? `<button class="btn-deletar" style="background:#2e7d32;" onclick="validarLimite(${lv.id})">✅</button>` : ''}
-                    <button class="btn-deletar" onclick="removerLimiteAdmin(${lv.id})">🗑️</button>
-                </td>`;
-            tbody.appendChild(tr);
-        });
-    }
-
-    async function removerLimiteAdmin(id) {
-        if (!confirm('Remover este limite?')) return;
-        try {
-            const r = await fetch(`${API_URL}/api/admin/limites-via/${id}`, {
-                method:'DELETE', headers:{'Authorization':`Bearer ${tokenLocal}`}
-            });
-            if (r.ok) { await sincronizarLimitesVia(); carregarAdminLimites(); }
-        } catch { alert('Erro ao remover.'); }
-    }
-
-    // =====================================================================
-    // OVERLAYS
-    // =====================================================================
-    function abrirTela(id) {
-        document.getElementById(id).style.display = 'flex';
-        if (id==='tela-meus-radares') renderizarMeusRadares();
-        if (id==='tela-historico')    renderizarHistorico();
-        if (id==='tela-admin')        { carregarUsuariosAdmin(); mostrarAbaAdmin('usuarios'); }
-    }
-    function fecharTela(id) { document.getElementById(id).style.display = 'none'; }
-
-    // =====================================================================
-    // POPUP EXCESSO
-    // =====================================================================
-    function exibirPopupVelocidade(vel, limite) {
-        if (popupAtivo) return;
-        const agora = Date.now();
-        if (agora - ultimoExcesso < 10000) return;
-        ultimoExcesso = agora;
-        popupAtivo = true;
-        document.getElementById('popup-msg').innerText     = `Sua velocidade: ${vel} km/h`;
-        document.getElementById('popup-detalhe').innerText = `Limite: ${limite} km/h`;
-        document.getElementById('popup-velocidade').style.display = 'flex';
-        emitirBipUnico(900, 0.3);
-        setTimeout(()=>emitirBipUnico(900,0.3), 350);
-        setTimeout(()=>emitirBipUnico(900,0.3), 700);
-        setTimeout(fecharPopupVelocidade, 5000);
-    }
-    function fecharPopupVelocidade() {
-        document.getElementById('popup-velocidade').style.display = 'none';
-        popupAtivo = false;
-    }
-
-    // =====================================================================
-    // BUSCA
-    // =====================================================================
-    async function buscarEndereco() {
-        const texto = document.getElementById('input-busca').value;
-        if (!texto) return;
-        try {
-            const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(texto+', Goiânia, Brasil')}&format=json&limit=5`, { headers:{'Accept-Language':'pt-BR'} });
-            const res = await r.json();
-            const div = document.getElementById('resultados-busca');
-            div.innerHTML = ''; div.style.display = res.length ? 'block' : 'none';
-            res.forEach(item => {
-                const el = document.createElement('div');
-                el.className = 'item-busca';
-                el.innerText = item.display_name;
-                el.onclick = () => {
-                    const lat = parseFloat(item.lat), lon = parseFloat(item.lon);
-                    mapa.setView([lat, lon], 16);
-                    if (marcadorDestino) mapa.removeLayer(marcadorDestino);
-                    marcadorDestino = L.marker([lat, lon]).addTo(mapa).bindPopup(`📍 ${item.display_name}`).openPopup();
-                    div.style.display = 'none';
-                    document.getElementById('input-busca').value = item.display_name.split(',')[0];
-                };
-                div.appendChild(el);
-            });
-        } catch {}
-    }
-    document.addEventListener('DOMContentLoaded', () => {
-        document.getElementById('input-busca').addEventListener('keypress', e => { if(e.key==='Enter') buscarEndereco(); });
     });
 
-    // =====================================================================
-    // ÁUDIO
-    // =====================================================================
-    function liberarAudioNavegador() {
-        if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-        if (audioCtx.state==='suspended') audioCtx.resume();
+
+    function handleLogin() {
+        const u = document.getElementById('user-input').value.toLowerCase().trim();
+        const p = document.getElementById('pass-input').value.trim();
+        const found = db.users.find(x => x.user.toLowerCase() === u && x.pass === p);
+        if((u === 'admin' && p === 'asb123') || found) {
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('main-app').style.display = 'block';
+            document.getElementById('welcome-msg').innerText = `Logado: ${u.toUpperCase()}`;
+            if((found && found.level === 'master') || u === 'admin') document.getElementById('nav-master').style.display = 'block';
+            refreshTemperature(); render();
+        } else { alert("Acesso Negado."); }
     }
 
-    function emitirBipUnico(freq, dur) {
-        if (!audioCtx) return;
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = 'sine'; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-        gain.gain.setValueAtTime(0.6, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
-        osc.connect(gain); gain.connect(audioCtx.destination);
-        osc.start(); osc.stop(audioCtx.currentTime + dur);
-    }
-
-    function iniciarBipeOscilatorio() {
-        if (bipIntervalId) return;
-        bipIntervalId = setInterval(()=>emitirBipUnico(1200, 0.12), 800);
-    }
-    function pararBipeOscilatorio() {
-        if (bipIntervalId) { clearInterval(bipIntervalId); bipIntervalId=null; }
-    }
-
-    // =====================================================================
-    // GPS
-    // =====================================================================
-    function calcDist(lat1, lon1, lat2, lon2) {
-        const R=6371000, dLat=(lat2-lat1)*Math.PI/180, dLon=(lon2-lon1)*Math.PI/180;
-        const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-        return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
-    }
-
-    function inicializarRastreamentoGPS() {
-        if (!('geolocation' in navigator)) return;
-        navigator.geolocation.watchPosition(pos => {
-            minhaLatAtual  = pos.coords.latitude;
-            minhaLonAtual  = pos.coords.longitude;
-            velocidadeGlobal = pos.coords.speed ? Math.round(pos.coords.speed*3.6) : 0;
-
-            document.getElementById('vel-atual').innerText = velocidadeGlobal;
-            document.getElementById('info-gps').innerHTML =
-                `GPS: ${parseInt(pos.coords.accuracy)}m | <span id="info-usuario">${usuarioAtual ? usuarioAtual.nome+(usuarioAtual.is_admin?' 👑':'') : ''}</span>`;
-
-            if (!marcadorMotorista) {
-                marcadorMotorista = L.marker([minhaLatAtual,minhaLonAtual],{icon:iconeMotorista}).addTo(mapa);
-            } else {
-                marcadorMotorista.setLatLng([minhaLatAtual,minhaLonAtual]);
-            }
-            mapa.setView([minhaLatAtual,minhaLonAtual],16);
-
-            let algumBipe = false;
-            let limiteAtivo = 0;
-            let textoStatus = 'SINALIZADOR DE VIA ACTIVO';
-            let distTexto = '';
-
-            // --- Verifica RADARES (100m) ---
-            listaRadares.forEach(radar => {
-                const dist = calcDist(minhaLatAtual,minhaLonAtual,radar.lat,radar.lon);
-                if (dist <= 100) {
-                    algumBipe = true;
-                    if (!radaresDentroDoRaio.has(radar.id)) {
-                        radaresDentroDoRaio.add(radar.id);
-                        registrarPassagem(radar, velocidadeGlobal);
-                        if (velocidadeGlobal > radar.velocidade) exibirPopupVelocidade(velocidadeGlobal, radar.velocidade);
-                    }
-                    if (radar.velocidade > limiteAtivo) limiteAtivo = radar.velocidade;
-                    textoStatus = `⚠️ RADAR: ${parseInt(dist)}m — ${radar.velocidade}km/h`;
-                    distTexto = `${parseInt(dist)}m`;
+    function openTab(id, btn) {
+        // Se está saindo da aba de orçamento E tem orçamento não salvo, limpa
+        const abaAtual = document.querySelector('.section-panel.active');
+        if(abaAtual && abaAtual.id === 'tab-orcamento' && id !== 'tab-orcamento') {
+            // Saindo da aba de orçamento
+            if(db.orc_temp && db.orc_temp.length > 0 && !currentEditingOrcId) {
+                // Tem produtos mas não salvou - pergunta se quer descartar
+                if(confirm('Você tem um orçamento não salvo. Deseja descartá-lo?')) {
+                    limparTelaOrcamento();
                 } else {
-                    radaresDentroDoRaio.delete(radar.id);
+                    return; // Não sai da aba
+                }
+            }
+        }
+        
+        document.querySelectorAll('.section-panel').forEach(s => s.classList.remove('active'));
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        btn.classList.add('active');
+        document.getElementById('search-est-input').value = "";
+        document.getElementById('search-cli-input').value = "";
+        document.getElementById('search-hist').value = "";
+        render();
+    }
+
+    // Cálculo automático de preço de venda (Custo + Markup + IPI + ICMS)
+    function calcVenda() {
+        const compra = parseFloat(document.getElementById('est-compra').value) || 0;
+        const mark = parseFloat(document.getElementById('est-markup').value) || 0;
+        const ipi = parseFloat(document.getElementById('est-ipi').value) || 0;
+        const icms = parseFloat(document.getElementById('est-icms').value) || 0;
+        
+        const precoComMarkup = compra + (compra * (mark / 100));
+        const total = precoComMarkup + (precoComMarkup * (ipi / 100)) + (precoComMarkup * (icms / 100));
+        
+        document.getElementById('est-val').value = total.toFixed(2);
+    }
+
+    function mostrarFormEstoque() { document.getElementById('form-estoque').style.display = 'grid'; }
+
+    function addEstoque() {
+        const item = {
+            desc: document.getElementById('est-desc').value.trim(),
+            unid: document.getElementById('est-unid').value.trim(),
+            ncm: document.getElementById('est-ncm').value.trim(),
+            cfop: document.getElementById('est-cfop').value.trim(),
+            cst: document.getElementById('est-cst').value.trim(),
+            compra: parseFloat(document.getElementById('est-compra').value) || 0,
+            markup: parseFloat(document.getElementById('est-markup').value) || 0,
+            ipi: parseFloat(document.getElementById('est-ipi').value) || 0,
+            icms: parseFloat(document.getElementById('est-icms').value) || 0,
+            val: parseFloat(document.getElementById('est-val').value) || 0,
+            qtd: parseInt(document.getElementById('est-qtd').value) || 0
+        };
+        if(!item.desc) return;
+        
+        // Se está editando um produto existente
+        if(editingEstoqueIndex !== null) {
+            const produtoAntigo = db.estoque[editingEstoqueIndex];
+            const precoMudou = produtoAntigo.val !== item.val;
+            
+            // Atualiza o produto
+            db.estoque[editingEstoqueIndex] = item;
+            
+            // Se o preço mudou, atualiza nos orçamentos PENDENTES
+            if(precoMudou && db.historico) {
+                let orcamentosAtualizados = 0;
+                db.historico.forEach(orc => {
+                    if(orc.status === 'Pendente' && orc.itens) {
+                        orc.itens.forEach(itemOrc => {
+                            if(itemOrc.desc === item.desc) {
+                                console.log(`📝 Atualizando preço de "${item.desc}" no orçamento Nº ${orc.numero}`);
+                                console.log(`   Preço antigo: R$ ${itemOrc.val.toFixed(2)} → Novo: R$ ${item.val.toFixed(2)}`);
+                                itemOrc.val = item.val;
+                                orcamentosAtualizados++;
+                            }
+                        });
+                        // Recalcula o total do orçamento
+                        orc.total = orc.itens.reduce((sum, it) => sum + (it.val * it.qtd), 0);
+                    }
+                });
+                
+                // Atualiza também o orçamento temporário atual (se houver)
+                if(db.orc_temp) {
+                    db.orc_temp.forEach(itemTemp => {
+                        if(itemTemp.desc === item.desc) {
+                            console.log(`📝 Atualizando preço no orçamento atual em edição`);
+                            itemTemp.val = item.val;
+                        }
+                    });
+                }
+                
+                if(orcamentosAtualizados > 0) {
+                    alert(`✅ PRODUTO ATUALIZADO!\n\n📦 ${item.desc}\n💰 R$ ${produtoAntigo.val.toFixed(2)} → R$ ${item.val.toFixed(2)}\n\n📋 ${orcamentosAtualizados} orçamento(s) pendente(s) atualizados com o novo preço!`);
+                } else if(precoMudou) {
+                    alert(`✅ Preço atualizado!\n\n📦 ${item.desc}\n💰 R$ ${produtoAntigo.val.toFixed(2)} → R$ ${item.val.toFixed(2)}`);
+                }
+            }
+        } else {
+            // Produto novo
+            db.estoque.push(item);
+        }
+        
+        cancelarEdicao(); 
+        
+        // Limpa a busca para mostrar todos os produtos (incluindo o que acabou de editar)
+        const searchInput = document.getElementById('search-est-input');
+        if(searchInput) searchInput.value = "";
+        
+        save();
+        
+        // Força render com filtro 'all' para garantir que mostra tudo
+        render('all');
+        
+        // Scroll para o topo da tabela para ver o produto editado
+        const tabela = document.getElementById('table-estoque');
+        if(tabela) tabela.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function editEstItem(idx) {
+        const i = db.estoque[idx];
+        document.getElementById('est-desc').value = i.desc;
+        document.getElementById('est-unid').value = i.unid;
+        document.getElementById('est-ncm').value = i.ncm;
+        document.getElementById('est-cfop').value = i.cfop || "";
+        document.getElementById('est-cst').value = i.cst || "";
+        document.getElementById('est-compra').value = i.compra || 0;
+        document.getElementById('est-markup').value = i.markup || 0;
+        document.getElementById('est-ipi').value = i.ipi || 0;
+        document.getElementById('est-icms').value = i.icms || 0;
+        document.getElementById('est-val').value = i.val;
+        document.getElementById('est-qtd').value = i.qtd;
+        editingEstoqueIndex = idx; mostrarFormEstoque();
+    }
+
+    function cancelarEdicao() {
+        editingEstoqueIndex = null; document.getElementById('form-estoque').style.display = 'none';
+        ['est-desc','est-unid','est-ncm','est-cfop','est-cst','est-compra','est-markup','est-ipi','est-icms','est-val','est-qtd'].forEach(id => document.getElementById(id).value = '');
+    }
+
+    function mostrarFormCliente() { document.getElementById('form-cliente').style.display = 'grid'; }
+    function addCliente() {
+        const c = {
+            nome: document.getElementById('cli-nome').value.trim(),
+            razao: document.getElementById('cli-razao').value.trim(),
+            tipo: document.getElementById('cli-tipo').value,
+            doc: document.getElementById('cli-doc').value.trim(),
+            tel: document.getElementById('cli-tel').value.trim(),
+            email: document.getElementById('cli-email').value.trim(),
+            end: document.getElementById('cli-end').value.trim(),
+            cidade: document.getElementById('cli-cidade').value.trim(),
+            uf: document.getElementById('cli-uf').value,
+            ultima_compra: editingClienteIndex !== null ? db.clientes[editingClienteIndex].ultima_compra : '---'
+        };
+        if(!c.nome) return;
+        if(editingClienteIndex !== null) db.clientes[editingClienteIndex] = c;
+        else db.clientes.push(c);
+        cancelarEdicaoCliente(); 
+        document.getElementById('search-cli-input').value = "";
+        save();
+    }
+
+    function editCliente(idx) {
+        const c = db.clientes[idx];
+        document.getElementById('cli-nome').value = c.nome;
+        document.getElementById('cli-razao').value = c.razao;
+        document.getElementById('cli-tipo').value = c.tipo;
+        document.getElementById('cli-doc').value = c.doc;
+        document.getElementById('cli-tel').value = c.tel;
+        document.getElementById('cli-email').value = c.email;
+        document.getElementById('cli-end').value = c.end;
+        document.getElementById('cli-cidade').value = c.cidade;
+        document.getElementById('cli-uf').value = c.uf;
+        editingClienteIndex = idx; mostrarFormCliente();
+    }
+
+    function cancelarEdicaoCliente() {
+        editingClienteIndex = null; document.getElementById('form-cliente').style.display = 'none';
+        ['cli-nome','cli-razao','cli-doc','cli-tel','cli-email','cli-end','cli-cidade'].forEach(id => document.getElementById(id).value = '');
+    }
+
+    // ── Gerar número único do orçamento: DDMMAA-SEQ ─────────────────
+    function gerarNumeroOrc() {
+        // Encontra o maior número de orçamento já usado
+        const numerosExistentes = (db.historico || [])
+            .map(h => {
+                if (!h.numero) return 0;
+                // Extrai apenas o número final após o hífen (ex: "231225-03" -> 3)
+                const match = h.numero.match(/-(\d+)$/);
+                return match ? parseInt(match[1], 10) : 0;
+            });
+        
+        const maiorNumero = numerosExistentes.length > 0 ? Math.max(...numerosExistentes) : 0;
+        const proximoNumero = maiorNumero + 1;
+        
+        // Formato: DDMMAA-XXX (onde XXX é o número sequencial)
+        const now = new Date();
+        const dd = String(now.getDate()).padStart(2,'0');
+        const mm = String(now.getMonth()+1).padStart(2,'0');
+        const aa = String(now.getFullYear()).slice(-2);
+        const base = `${dd}${mm}${aa}`;
+        const seq = String(proximoNumero).padStart(3,'0');
+        
+        return `${base}-${seq}`;
+    }
+
+    // ── Preencher dados do cliente na área de impressão ──────────────
+    function preencherDadosCliente(nomeCliente) {
+        const c = (db.clientes || []).find(x => x.nome === nomeCliente);
+        document.getElementById('orc-dc-nome').innerText   = c ? `Cliente: ${c.nome}${c.razao ? ' | ' + c.razao : ''}` : (nomeCliente || '');
+        document.getElementById('orc-dc-doc').innerText    = c ? (c.doc  || '—') : '—';
+        document.getElementById('orc-dc-email').innerText  = c ? (c.email|| '—') : '—';
+        document.getElementById('orc-dc-end').innerText    = c ? (c.end  || '—') : '—';
+        document.getElementById('orc-dc-cidade').innerText = c ? `${c.cidade||''}/${c.uf||''}` : '—';
+        document.getElementById('orc-dc-tel').innerText    = c ? (c.tel  || '—') : '—';
+    }
+
+    // ── ORÇAMENTO: produto selecionado temporariamente ──────────────
+    let orcProdutoSelecionado = null;
+    let orcResultadoIndex = -1;
+
+    function filterItemsLive() {
+        const term = document.getElementById('orc-search').value.trim().toUpperCase();
+        const box = document.getElementById('orc-resultados');
+        orcProdutoSelecionado = null;
+        orcResultadoIndex = -1;
+
+        if(!term || !db.estoque) { box.style.display = 'none'; return; }
+
+        const found = db.estoque.filter(i => i.desc.toUpperCase().includes(term));
+        if(found.length === 0) {
+            box.innerHTML = '<div class="orc-sem-resultado">Nenhum produto encontrado</div>';
+            box.style.display = 'block';
+            return;
+        }
+
+        box.innerHTML = found.map((i, idx) => {
+            const estIdx = db.estoque.findIndex(e => e.desc === i.desc);
+            return `<div class="orc-res-item" data-desc="${i.desc}" data-idx="${idx}"
+                  onmousedown="selecionarProdutoOrc('${i.desc.replace(/'/g,"\\'")}')">
+                <span>${i.desc}</span>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <button onclick="event.stopPropagation(); abrirModalProduto(${estIdx})" 
+                            style="background: none; border: none; cursor: pointer; font-size: 18px; padding: 0 5px;" 
+                            title="Ver detalhes do produto">ℹ️</button>
+                    <span class="orc-res-preco">R$ ${parseFloat(i.val).toFixed(2)}</span>
+                </div>
+             </div>`;
+        }).join('');
+        box.style.display = 'block';
+    }
+
+    function selecionarProdutoOrc(desc) {
+        orcProdutoSelecionado = db.estoque.find(p => p.desc === desc);
+        if(orcProdutoSelecionado) {
+            document.getElementById('orc-search').value = orcProdutoSelecionado.desc;
+            document.getElementById('orc-resultados').style.display = 'none';
+            document.getElementById('orc-qtd-sel').focus();
+            document.getElementById('orc-qtd-sel').select();
+        }
+    }
+
+    function orcSearchKeydown(e) {
+        const box = document.getElementById('orc-resultados');
+        const items = box.querySelectorAll('.orc-res-item');
+        if(e.key === 'ArrowDown') {
+            e.preventDefault();
+            orcResultadoIndex = Math.min(orcResultadoIndex + 1, items.length - 1);
+            items.forEach((el, i) => el.classList.toggle('selected', i === orcResultadoIndex));
+        } else if(e.key === 'ArrowUp') {
+            e.preventDefault();
+            orcResultadoIndex = Math.max(orcResultadoIndex - 1, 0);
+            items.forEach((el, i) => el.classList.toggle('selected', i === orcResultadoIndex));
+        } else if(e.key === 'Enter') {
+            e.preventDefault();
+            if(orcResultadoIndex >= 0 && items[orcResultadoIndex]) {
+                selecionarProdutoOrc(items[orcResultadoIndex].dataset.desc);
+            } else if(orcProdutoSelecionado) {
+                addItemOrc();
+            }
+        } else if(e.key === 'Escape') {
+            box.style.display = 'none';
+        }
+    }
+
+    // Fechar dropdown ao clicar fora
+    document.addEventListener('click', function(e) {
+        if(!e.target.closest('.orc-search-wrapper')) {
+            const box = document.getElementById('orc-resultados');
+            if(box) box.style.display = 'none';
+        }
+    });
+
+    function addItemOrc() {
+        // Tenta usar o produto selecionado pelo autocomplete, ou busca pelo texto do campo
+        let prod = orcProdutoSelecionado;
+        if(!prod) {
+            const term = document.getElementById('orc-search').value.trim().toUpperCase();
+            if(term && db.estoque) prod = db.estoque.find(p => p.desc.toUpperCase() === term);
+        }
+        const qtd = parseInt(document.getElementById('orc-qtd-sel').value) || 1;
+        if(!prod) { alert("Selecione um produto da lista!"); return; }
+        if(!db.orc_temp) db.orc_temp = [];
+        db.orc_temp.push({id: Date.now(), desc: prod.desc, val: prod.val, qtd: qtd});
+        // Limpar campos de busca para facilitar próxima inserção
+        document.getElementById('orc-search').value = '';
+        document.getElementById('orc-resultados').style.display = 'none';
+        document.getElementById('orc-qtd-sel').value = 1;
+        orcProdutoSelecionado = null;
+        // Salva e renderiza para mostrar imediatamente
+        save();
+        render();
+        document.getElementById('orc-search').focus();
+    }
+
+    function novoOrcamento() {
+        const modal = document.getElementById('modal-confirmacao');
+        if(modal) {
+            document.getElementById('modal-msg').innerText = "Limpar orçamento atual e começar um novo?";
+            modal.style.display = 'flex';
+            document.getElementById('modal-btn-sim').onclick = function() {
+                modal.style.display = 'none';
+                _limparOrcamento();
+            };
+            document.getElementById('modal-btn-nao').onclick = function() {
+                modal.style.display = 'none';
+            };
+        } else { _limparOrcamento(); }
+    }
+
+    function _limparOrcamento() {
+        limparTelaOrcamento();
+        
+        // Gera novo número
+        currentOrcNumero = gerarNumeroOrc();
+        
+        // Atualiza badge do número
+        const badge = document.getElementById('orc-num-badge');
+        if(badge) badge.innerText = `Nº ${currentOrcNumero}`;
+        
+        const numImpresso = document.getElementById('orc-num-impresso');
+        if(numImpresso) numImpresso.innerText = `Nº ${currentOrcNumero}  |  Data: ${new Date().toLocaleDateString('pt-BR')}`;
+        
+        // Reseta totais
+        ['res-materiais','res-acessorios','res-mo'].forEach(id => {
+            const el = document.getElementById(id);
+            if(el) el.innerText = 'R$ 0.00';
+        });
+        const totalEl = document.getElementById('res-total-final');
+        if(totalEl) totalEl.innerText = 'R$ 0.00';
+        
+        // Limpa dados cliente impressos
+        ['orc-dc-nome','orc-dc-doc','orc-dc-email','orc-dc-end','orc-dc-cidade','orc-dc-tel'].forEach(id => {
+            const el = document.getElementById(id);
+            if(el) el.innerText = '';
+        });
+        
+        save();
+    }
+
+    function removerItemOrc(idx) {
+        if(db.orc_temp) { 
+            db.orc_temp.splice(idx, 1); 
+            save();
+            render(); // Atualiza a lista imediatamente
+        }
+    }
+
+    function editarItemOrc(idx) {
+        if(!db.orc_temp || !db.orc_temp[idx]) return;
+        
+        const item = db.orc_temp[idx];
+        
+        // Cria modal personalizado para edição
+        const modalHtml = `
+            <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 10000;" id="modal-edit-item">
+                <div style="background: white; padding: 30px; border-radius: 12px; max-width: 500px; width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+                    <h3 style="margin: 0 0 20px 0; color: var(--asb-blue); border-bottom: 2px solid var(--asb-blue); padding-bottom: 10px;">
+                        ✏️ Editar Item do Orçamento
+                    </h3>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; font-weight: 600; margin-bottom: 5px; color: #555;">📦 Produto:</label>
+                        <input type="text" value="${item.desc}" readonly style="width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 6px; background: #f5f5f5; color: #666;">
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; font-weight: 600; margin-bottom: 5px; color: #555;">🔢 Quantidade:</label>
+                        <input type="number" id="edit-item-qtd" value="${item.qtd}" min="1" style="width: 100%; padding: 10px; border: 2px solid var(--asb-blue); border-radius: 6px; font-size: 16px;">
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; font-weight: 600; margin-bottom: 5px; color: #555;">💰 Valor Unitário (R$):</label>
+                        <input type="number" id="edit-item-val" value="${item.val.toFixed(2)}" min="0" step="0.01" style="width: 100%; padding: 10px; border: 2px solid var(--asb-blue); border-radius: 6px; font-size: 16px;">
+                        <small style="color: #999; display: block; margin-top: 5px;">💡 Este valor é só para este orçamento. Não altera o estoque!</small>
+                    </div>
+                    
+                    <div style="background: #f0f8ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid var(--asb-blue);">
+                        <div style="font-weight: 600; color: #333; margin-bottom: 5px;">📊 Total do item:</div>
+                        <div id="edit-item-total" style="font-size: 24px; font-weight: 900; color: var(--asb-blue);">
+                            R$ ${(item.qtd * item.val).toFixed(2)}
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="cancelarEdicaoItem()" class="btn" style="flex: 1; background: #6c757d; color: white; padding: 12px; font-size: 14px; height: auto;">
+                            ❌ Cancelar
+                        </button>
+                        <button onclick="salvarEdicaoItem(${idx})" class="btn" style="flex: 1; background: var(--asb-success); color: white; padding: 12px; font-size: 14px; height: auto;">
+                            ✅ Salvar Alterações
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Atualiza total ao mudar quantidade ou valor
+        const qtdInput = document.getElementById('edit-item-qtd');
+        const valInput = document.getElementById('edit-item-val');
+        const totalDisplay = document.getElementById('edit-item-total');
+        
+        function atualizarTotal() {
+            const qtd = parseFloat(qtdInput.value) || 0;
+            const val = parseFloat(valInput.value) || 0;
+            totalDisplay.textContent = `R$ ${(qtd * val).toFixed(2)}`;
+        }
+        
+        qtdInput.addEventListener('input', atualizarTotal);
+        valInput.addEventListener('input', atualizarTotal);
+        
+        // Focar no campo de quantidade
+        qtdInput.focus();
+        qtdInput.select();
+    }
+    
+    function cancelarEdicaoItem() {
+        const modal = document.getElementById('modal-edit-item');
+        if(modal) modal.remove();
+    }
+    
+    function salvarEdicaoItem(idx) {
+        const qtd = parseInt(document.getElementById('edit-item-qtd').value);
+        const val = parseFloat(document.getElementById('edit-item-val').value);
+        
+        if(isNaN(qtd) || qtd <= 0) {
+            alert('❌ Quantidade inválida!');
+            return;
+        }
+        
+        if(isNaN(val) || val < 0) {
+            alert('❌ Valor inválido!');
+            return;
+        }
+        
+        // Atualiza o item
+        db.orc_temp[idx].qtd = qtd;
+        db.orc_temp[idx].val = val;
+        
+        // Fecha modal
+        cancelarEdicaoItem();
+        
+        // Salva e atualiza
+        save();
+        render();
+        
+        // Feedback
+        const total = (qtd * val).toFixed(2);
+        console.log(`✅ Item editado: ${db.orc_temp[idx].desc} | Qtd: ${qtd} | Valor: R$ ${val.toFixed(2)} | Total: R$ ${total}`);
+    }
+
+    function calculateTotal() {
+        let mat = 0; if(db.orc_temp) db.orc_temp.forEach(o => mat += (o.val * o.qtd));
+        const pA = parseFloat(document.getElementById('orc-perc-acess').value) || 0;
+        const mF = parseFloat(document.getElementById('orc-mo-fixo').value) || 0;
+        const pM = parseFloat(document.getElementById('orc-perc-mo').value) || 0;
+        const acess = mat * (pA/100);
+        const mo = mF + (mat * (pM/100));
+        const total = mat + acess + mo;
+        document.getElementById('res-materiais').innerText = `R$ ${mat.toFixed(2)}`;
+        document.getElementById('res-acessorios').innerText = `R$ ${acess.toFixed(2)}`;
+        document.getElementById('res-mo').innerText = `R$ ${mo.toFixed(2)}`;
+        document.getElementById('res-total-final').innerText = `R$ ${total.toFixed(2)}`;
+        const cliVal = document.getElementById('orc-cli-sel').value;
+        // Preenche dados do cliente na área impressa
+        if(cliVal) preencherDadosCliente(cliVal);
+        // Exibe número do orçamento
+        if(currentOrcNumero) {
+            document.getElementById('orc-num-badge').innerText  = `Nº ${currentOrcNumero}`;
+            document.getElementById('orc-num-impresso').innerText = `Nº ${currentOrcNumero}  |  Data: ${new Date().toLocaleDateString('pt-BR')}`;
+        }
+        return total;
+    }
+
+    function limparTelaOrcamento() {
+        // Limpa lista de produtos temporária
+        db.orc_temp = [];
+        
+        // Limpa variáveis de controle
+        currentEditingOrcId = null;
+        currentOrcNumero = null;
+        orcProdutoSelecionado = null;
+        
+        // Limpa campos do formulário
+        document.getElementById('orc-cli-sel').value = '';
+        document.getElementById('orc-search').value = '';
+        document.getElementById('orc-qtd-sel').value = 1;
+        
+        // Reseta valores de acessórios e mão de obra para ZERO
+        document.getElementById('orc-perc-acess').value = 0;
+        document.getElementById('orc-mo-fixo').value = 0;
+        document.getElementById('orc-perc-mo').value = 0;
+        
+        // Esconde resultados da busca
+        const resultados = document.getElementById('orc-resultados');
+        if(resultados) resultados.style.display = 'none';
+        
+        // Limpa badge de número (se existir)
+        const badge = document.getElementById('orc-num-display');
+        if(badge) badge.textContent = '--';
+        
+        // Foca no campo de cliente
+        document.getElementById('orc-cli-sel').focus();
+        
+        console.log('🧹 Tela de orçamento limpa completamente');
+    }
+
+    function finalizarERegistrar() {
+        const cli = document.getElementById('orc-cli-sel').value;
+        if(!cli) return mostrarModalInfo("⚠️ Selecione um cliente antes de finalizar!");
+        if(!db.orc_temp || db.orc_temp.length === 0) return mostrarModalInfo("⚠️ Adicione ao menos um produto ao orçamento!");
+        if(!db.historico) db.historico = [];
+        // Preserva o status original se for edição
+        let statusAtual = 'Pendente';
+        if(currentEditingOrcId) {
+            const existente = db.historico.find(x => x.id === currentEditingOrcId);
+            if(existente) statusAtual = existente.status;
+        }
+        // Número: reutiliza se for edição, senão usa o currentOrcNumero
+        const numero = currentEditingOrcId
+            ? (db.historico.find(x => x.id === currentEditingOrcId)?.numero || currentOrcNumero)
+            : (currentOrcNumero || gerarNumeroOrc());
+        const orcData = {
+            id:        currentEditingOrcId || Date.now(),
+            numero:    numero,
+            data:      new Date().toLocaleString(),
+            cliente:   cli,
+            total:     calculateTotal(),
+            status:    statusAtual,
+            itens:     [...db.orc_temp],
+            perc_acess: document.getElementById('orc-perc-acess').value,
+            mo_fixo:    document.getElementById('orc-mo-fixo').value,
+            perc_mo:    document.getElementById('orc-perc-mo').value
+        };
+        if(currentEditingOrcId) {
+            const idx = db.historico.findIndex(x => x.id === currentEditingOrcId);
+            if(idx >= 0) db.historico[idx] = orcData;
+        } else {
+            db.historico.push(orcData);
+        }
+        db.orc_temp = []; currentEditingOrcId = null; currentOrcNumero = null;
+        console.log('💾 Finalizando orçamento Nº', numero, 'com status:', statusAtual);
+        console.log('📋 Orçamento salvo:', orcData);
+        save();
+        
+        // Limpa COMPLETAMENTE a tela de orçamento
+        limparTelaOrcamento();
+        
+        setTimeout(() => {
+            render();
+            mostrarModalInfo(`✅ Orçamento <strong>Nº ${numero}</strong> registrado com sucesso!<br>Status: ${statusAtual}`);
+        }, 500);
+    }
+
+    function debugStatus() {
+        console.log('🐛 ═══════════════════════════════════════════');
+        console.log('🐛 DEBUG STATUS - DIAGNÓSTICO COMPLETO');
+        console.log('🐛 Timestamp:', new Date().toLocaleString());
+        console.log('🐛 ═══════════════════════════════════════════');
+        
+        console.log('📊 DB LOCAL:');
+        if(db.historico && db.historico.length > 0) {
+            db.historico.forEach((h, idx) => {
+                console.log(`   [${idx}] ID: ${h.id}`);
+                console.log(`        Número: ${h.numero}`);
+                console.log(`        Cliente: ${h.cliente}`);
+                console.log(`        Status: "${h.status}" (tipo: ${typeof h.status})`);
+                console.log(`        Data: ${h.data}`);
+            });
+        } else {
+            console.log('   ⚠️ Nenhum orçamento no db.historico');
+        }
+        
+        console.log('');
+        console.log('🔥 VERIFICANDO FIREBASE:');
+        database.ref(DB_PATH + '/historico').once('value', (snapshot) => {
+            const hist = snapshot.val();
+            if(hist && hist.length > 0) {
+                console.log('📦 FIREBASE HISTORICO:');
+                hist.forEach((h, idx) => {
+                    console.log(`   [${idx}] ID: ${h.id}`);
+                    console.log(`        Número: ${h.numero}`);
+                    console.log(`        Cliente: ${h.cliente}`);
+                    console.log(`        Status: "${h.status}" (tipo: ${typeof h.status})`);
+                });
+            } else {
+                console.log('   ⚠️ Nenhum orçamento no Firebase');
+            }
+            console.log('🐛 ═══════════════════════════════════════════');
+        });
+        
+        alert('🐛 Diagnóstico completo no console (F12)!\n\nVerifique os logs detalhados.');
+    }
+
+    function salvarStatus(id) {
+        const selectElement = document.getElementById(`status-${id}`);
+        const newStatus = selectElement.value;
+        const h = db.historico.find(x => x.id === id);
+        
+        if (!h) return alert('Orçamento não encontrado!');
+        if (h.status === newStatus) return alert('Status já está como ' + newStatus);
+        
+        console.log('🔄 SALVANDO STATUS:', h.status, '→', newStatus);
+        
+        if (newStatus === 'Aprovado') {
+            if(!confirm(`Aprovar orçamento Nº ${h.numero}?\n\nIsso vai:\n- Reduzir o estoque\n- Registrar movimentação`)) {
+                selectElement.value = h.status;
+                return;
+            }
+            
+            // Reduz estoque e registra movimentação
+            (h.itens || []).forEach(it => {
+                const p = db.estoque.find(e => e.desc === it.desc);
+                if(p) {
+                    p.qtd -= it.qtd;
+                    if(!db.movimentacoes) db.movimentacoes = [];
+                    db.movimentacoes.push({
+                        data: new Date().toLocaleString('pt-BR'), 
+                        produto: it.desc, 
+                        qtd: it.qtd, 
+                        destino: h.cliente
+                    });
                 }
             });
+        }
+        
+        // Muda status
+        h.status = newStatus;
+        
+        // Salva TUDO
+        save();
+        
+        // Atualiza tela
+        render();
+        
+        alert(`✅ Status alterado para ${newStatus}!`);
+    }
 
-            // --- Verifica LIMITES DE VIA (50m) ---
-            listaLimitesVia.forEach(lv => {
-                const dist = calcDist(minhaLatAtual,minhaLonAtual,lv.lat,lv.lon);
-                if (dist <= 50) {
-                    if (!limitesDentroDoRaio.has(lv.id)) {
-                        limitesDentroDoRaio.add(lv.id);
-                        // Atualiza limite da via no painel
-                        document.getElementById('limite-via-display').innerText = lv.velocidade;
-                        document.getElementById('limite-via-btn').innerText = lv.velocidade;
-                        if (velocidadeGlobal > lv.velocidade) exibirPopupVelocidade(velocidadeGlobal, lv.velocidade);
-                    }
-                    if (!limiteAtivo) limiteAtivo = lv.velocidade;
-                    if (textoStatus === 'SINALIZADOR DE VIA ACTIVO')
-                        textoStatus = `🚧 VIA ${lv.velocidade}km/h`;
-                } else {
-                    limitesDentroDoRaio.delete(lv.id);
-                }
+    function updateStatus(id, newStatus) {
+        const h = db.historico.find(x => x.id === id);
+        if(!h || h.status === newStatus) return;
+        
+        console.log('Atualizando status de', h.status, 'para', newStatus);
+        
+        if(newStatus === 'Aprovado') {
+            // Verifica estoque antes de aprovar
+            const semEstoque = (h.itens || []).filter(it => {
+                const p = db.estoque.find(e => e.desc === it.desc);
+                return p && p.qtd < it.qtd;
             });
-
-            limiteGlobal = limiteAtivo || 60;
-            statusTextoGlobal = textoStatus;
-
-            algumBipe ? iniciarBipeOscilatorio() : pararBipeOscilatorio();
-
-            document.getElementById('texto-status').innerText = textoStatus;
-            document.getElementById('vel-maxima').innerText   = limiteAtivo || '--';
-            document.getElementById('distancia-radar').innerText = distTexto;
-
-            // Semáforo
-            const lv2 = document.getElementById('luz-verde');
-            const la2 = document.getElementById('luz-amarela');
-            const lr2 = document.getElementById('luz-vermelha');
-            lv2.classList.remove('ativa'); la2.classList.remove('ativa'); lr2.classList.remove('ativa');
-            if      (velocidadeGlobal > limiteGlobal)           lr2.classList.add('ativa');
-            else if (velocidadeGlobal >= limiteGlobal*0.9)      la2.classList.add('ativa');
-            else                                                 lv2.classList.add('ativa');
-
-            atualizarOverlay();
-
-        }, null, {enableHighAccuracy:true, maximumAge:0, timeout:5000});
+            const msgAlerta = semEstoque.length > 0
+                ? `⚠️ Atenção: estoque insuficiente para:<br>${semEstoque.map(i=>i.desc).join('<br>')}<br><br>Deseja aprovar mesmo assim?`
+                : `Confirmar aprovação do Nº ${h.numero||h.id}?<br>O estoque será reduzido automaticamente.`;
+            mostrarModalConfirm(msgAlerta, () => {
+                (h.itens || []).forEach(it => {
+                    const p = db.estoque.find(e => e.desc === it.desc);
+                    if(p) {
+                        console.log('Reduzindo estoque de:', it.desc, 'Qtd:', it.qtd);
+                        p.qtd -= it.qtd;
+                        if(!db.movimentacoes) db.movimentacoes = [];
+                        const movimento = {
+                            data: new Date().toLocaleString('pt-BR'), 
+                            produto: it.desc, 
+                            qtd: it.qtd, 
+                            destino: h.cliente
+                        };
+                        console.log('Registrando movimentação:', movimento);
+                        db.movimentacoes.push(movimento);
+                    }
+                });
+                h.status = 'Aprovado'; 
+                console.log('Status atualizado para Aprovado');
+                save();
+                render();
+            }, () => { 
+                // Se cancelar, volta o select para o status anterior
+                render(); 
+            });
+        } else {
+            h.status = newStatus; 
+            console.log('Status atualizado para', newStatus);
+            save();
+            render();
+        }
     }
 
-    // =====================================================================
-    // PIP
-    // =====================================================================
-    const canvas = document.getElementById('canvas-pip');
-    const ctx    = canvas.getContext('2d');
-    const video  = document.getElementById('video-pip');
-    let pipAtivo=false, pipPreparado=false, overlayAtivo=false;
-
-    async function prepararPip() {
-        if (pipPreparado) return;
-        try { video.srcObject=canvas.captureStream(15); await video.play(); pipPreparado=true; desenharFramePip(); } catch {}
+    function editOrcHist(id) {
+        const h = db.historico.find(x => x.id === id);
+        if(h) {
+            db.orc_temp = [...h.itens];
+            currentEditingOrcId = h.id;
+            currentOrcNumero = h.numero || gerarNumeroOrc();
+            // Navega para aba orçamento pelo id, sem depender de índice fixo
+            const btnOrc = document.querySelector('[onclick*="tab-orcamento"]');
+            openTab('tab-orcamento', btnOrc);
+            document.getElementById('orc-cli-sel').value = h.cliente;
+            document.getElementById('orc-perc-acess').value = h.perc_acess || 0;
+            document.getElementById('orc-mo-fixo').value = h.mo_fixo || 0;
+            document.getElementById('orc-perc-mo').value = h.perc_mo || 0;
+            // Atualiza badge e dados do cliente
+            document.getElementById('orc-num-badge').innerText = `Nº ${currentOrcNumero}`;
+            preencherDadosCliente(h.cliente);
+            render();
+        }
     }
 
-    function desenharFramePip() {
-        const cor = velocidadeGlobal>limiteGlobal?'#ff1744':velocidadeGlobal>=limiteGlobal*0.9?'#ffea00':'#00e676';
-        ctx.fillStyle='#1a1a2a'; ctx.fillRect(0,0,500,500);
-        ctx.fillStyle=cor; ctx.font='bold 180px Arial'; ctx.textAlign='center';
-        ctx.fillText(velocidadeGlobal,250,260);
-        ctx.fillStyle='#888'; ctx.font='bold 30px Arial'; ctx.fillText('KM/H',250,310);
-        ctx.fillStyle='#ffea00'; ctx.font='bold 24px Arial';
-        ctx.fillText(statusTextoGlobal.substring(0,28),250,370);
-        ctx.fillStyle='#aaa'; ctx.font='22px Arial';
-        ctx.fillText(`Limite: ${limiteGlobal} km/h`,250,420);
+    function addNewUser() {
+        const u = document.getElementById('new-user').value.trim();
+        const p = document.getElementById('new-pass').value.trim();
+        if(!u || !p) return mostrarModalInfo("⚠️ Preencha usuário e senha!");
+        if(db.users && db.users.find(x => x.user.toLowerCase() === u.toLowerCase()))
+            return mostrarModalInfo("⚠️ Usuário já existe!");
+        if(!db.users) db.users = [];
+        db.users.push({user: u, pass: p, level: 'comum'});
+        document.getElementById('new-user').value = '';
+        document.getElementById('new-pass').value = '';
+        save();
+        render();
+        mostrarModalInfo(`✅ Usuário <strong>${u}</strong> cadastrado!`);
     }
 
-    function desenharPainelFlutuante() { desenharFramePip(); if (pipAtivo) requestAnimationFrame(desenharPainelFlutuante); }
+    function refreshTemperature() {
+        const t = (Math.random() * (26 - 19) + 19).toFixed(1);
+        document.getElementById('temp-val').innerText = t + "°C";
+    }
 
-    async function alternarModoFlutuante() {
-        liberarAudioNavegador(); await prepararPip();
-        try {
-            if (!document.pictureInPictureElement) {
-                desenharFramePip(); await new Promise(r=>setTimeout(r,200));
-                await video.requestPictureInPicture();
-                pipAtivo=true; desenharPainelFlutuante();
-            } else {
-                await document.exitPictureInPicture(); pipAtivo=false;
+    function exportDB() {
+        const blob = new Blob([JSON.stringify(db)], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = `ASB_BACKUP.json`; a.click();
+    }
+
+    function importDB(input) {
+        const reader = new FileReader();
+        reader.onload = function() {
+            db = JSON.parse(reader.result); save(); alert("Sucesso!");
+        };
+        reader.readAsText(input.files[0]);
+    }
+
+    function limparHistoricoGeral() {
+        mostrarModalConfirm("⚠️ Isso apagará TODO o histórico e logs de movimentação.<br>Esta ação não pode ser desfeita. Confirma?", () => {
+            db.historico = []; db.movimentacoes = []; save();
+            mostrarModalInfo("✅ Histórico e logs limpos.");
+        });
+    }
+
+    function forceRealtimeSync() { initCloud(); alert("Reiniciado!"); }
+
+    function render(filter) {
+        if(!db) return;
+
+        // ESTOQUE
+        const sEst = document.getElementById('search-est-input').value.toUpperCase();
+        const tableEst = document.getElementById('table-estoque');
+        const estTbody = document.getElementById('tbl-estoque-corpo');
+        if(estTbody) {
+            estTbody.innerHTML = '';
+            if(sEst !== "" || filter === 'all'){
+                tableEst.classList.remove('hide-table');
+                if(db.estoque) db.estoque.forEach((item, idx) => {
+                    if(filter === 'all' || item.desc.toUpperCase().includes(sEst)) {
+                        estTbody.innerHTML += `<tr><td>${item.desc}</td><td>${item.unid}</td><td>${item.ncm}</td><td>${item.cfop || ""}</td><td>${item.cst || ""}</td><td>R$ ${parseFloat(item.val).toFixed(2)}</td><td style="text-align: center;"><strong>${item.qtd}</strong></td><td class="no-print"><div class="acoes-inline"><button class="btn" style="background: #e8f4fd; color: #0056b3; border: 1px solid #b8d4ee; padding: 4px 10px; height: 26px; font-size: 10px; display: inline-flex; align-items: center; gap: 4px;" onclick="abrirModalProduto(${idx})" title="Ver detalhes completos">👁️ VER</button><button class="btn btn-edit" onclick="editEstItem(${idx})">EDIT</button><button class="btn btn-del" onclick="excluirEstoque(${idx})">DEL</button></div></td></tr>`;
+                    }
+                });
+            } else { tableEst.classList.add('hide-table'); }
+        }
+
+        // CLIENTES
+        const sCli = document.getElementById('search-cli-input').value.toUpperCase();
+        const tableCli = document.getElementById('table-clientes');
+        const cliTbody = document.getElementById('tbl-clientes-corpo');
+        if(cliTbody) {
+            cliTbody.innerHTML = '';
+            if(sCli !== "" || filter === 'all'){
+                tableCli.classList.remove('hide-table');
+                if(db.clientes) db.clientes.forEach((c, idx) => {
+                    if(filter === 'all' || c.nome.toUpperCase().includes(sCli)) {
+                        cliTbody.innerHTML += `<tr><td><strong>${c.nome}</strong><br><small>${c.doc}</small></td><td>${c.tel}</td><td>${c.cidade}/${c.uf}</td><td>${c.ultima_compra || '---'}</td><td class="no-print"><button class="btn btn-edit" onclick="editCliente(${idx})">EDIT</button></td></tr>`;
+                    }
+                });
+            } else { tableCli.classList.add('hide-table'); }
+        }
+
+        // ORÇAMENTO - preserva seleção do cliente durante sync
+        const orcCliSel = document.getElementById('orc-cli-sel');
+        if(orcCliSel && db.clientes) {
+            const current = orcCliSel.value;
+            orcCliSel.innerHTML = '<option value="">Selecionar Cliente</option>';
+            db.clientes.forEach(c => { orcCliSel.innerHTML += `<option value="${c.nome}" ${current === c.nome ? 'selected' : ''}>${c.nome} - ${c.cidade||''}</option>`; });
+            if(current) orcCliSel.value = current; // garante que preserva mesmo após innerHTML
+        }
+        const orcTbody = document.getElementById('orc-lista-corpo');
+        const orcArea = document.getElementById('orc-area');
+        if(orcTbody) {
+            orcTbody.innerHTML = '';
+            if(db.orc_temp && db.orc_temp.length > 0) {
+                orcArea.classList.remove('hide-table');
+                db.orc_temp.forEach((it, idx) => {
+                    orcTbody.innerHTML += `<tr>
+                        <td>${it.qtd}</td>
+                        <td>${it.desc}</td>
+                        <td>R$ ${parseFloat(it.val).toFixed(2)}</td>
+                        <td>R$ ${(it.val * it.qtd).toFixed(2)}</td>
+                        <td class="no-print">
+                            <div style="display: flex; gap: 4px; justify-content: center;">
+                                <button class="btn btn-edit" onclick="editarItemOrc(${idx})" title="Editar quantidade" style="padding: 4px 8px; height: 24px; font-size: 10px;">✏️</button>
+                                <button class="btn btn-del" onclick="removerItemOrc(${idx})" title="Remover item" style="padding: 4px 8px; height: 24px; font-size: 10px;">✕</button>
+                            </div>
+                        </td>
+                    </tr>`;
+                });
+            } else { orcArea.classList.add('hide-table'); }
+            calculateTotal();
+        }
+
+        // HISTÓRICO
+        const sHist = document.getElementById('search-hist').value.toUpperCase();
+        const tableHist = document.getElementById('table-historico');
+        const histTbody = document.getElementById('tbl-historico-corpo');
+        if(histTbody) {
+            histTbody.innerHTML = '';
+            console.log('📋 Renderizando HISTÓRICO...');
+            console.log('📋 Total de orçamentos:', db.historico ? db.historico.length : 0);
+            if(db.historico && db.historico.length > 0) {
+                console.log('📋 Status de todos os orçamentos:', db.historico.map(x => ({id: x.id, numero: x.numero, status: x.status})));
             }
-        } catch { mostrarVelocimetroSobreposto(); }
+            
+            // SEMPRE mostra a tabela, não só quando tem busca
+            tableHist.classList.remove('hide-table');
+            const filtroStatus = document.getElementById('filter-hist-status') ? document.getElementById('filter-hist-status').value : '';
+            
+            console.log('🔍 Filtro de busca (texto):', sHist);
+            console.log('🔍 Filtro de status:', filtroStatus);
+            
+            if(db.historico) {
+                let totalMostrados = 0;
+                db.historico.slice().reverse().forEach((h) => {
+                    // Se não tem busca de texto, mostra todos (matchTxt = true)
+                    const matchTxt = sHist === "" || h.cliente.toUpperCase().includes(sHist) || (h.numero && h.numero.toUpperCase().includes(sHist));
+                    // Se não tem filtro de status, mostra todos (matchSts = true)
+                    const matchSts = !filtroStatus || h.status === filtroStatus;
+                    
+                    if(matchTxt && matchSts) {
+                        totalMostrados++;
+                        console.log('✅ Mostrando orçamento:', h.numero, 'Status:', h.status);
+                        // Define cor baseada no status atual
+                        let bgColor, textColor, borderColor;
+                        if (h.status === 'Aprovado') {
+                            bgColor = '#d4edda';
+                            textColor = '#155724';
+                            borderColor = '#28a745';
+                        } else if (h.status === 'Cancelado') {
+                            bgColor = '#f8d7da';
+                            textColor = '#721c24';
+                            borderColor = '#dc3545';
+                        } else { // Pendente
+                            bgColor = '#fff3cd';
+                            textColor = '#856404';
+                            borderColor = '#ff9800';
+                        }
+                        
+                        histTbody.innerHTML += `<tr>
+                            <td><strong style="color:var(--asb-blue)">${h.numero||'—'}</strong></td>
+                            <td>${h.data}</td>
+                            <td>${h.cliente}</td>
+                            <td>R$ ${parseFloat(h.total).toFixed(2)}</td>
+                            <td>
+                                <div style="display: flex; gap: 4px; align-items: center;">
+                                    <select id="status-${h.id}"
+                                            style="background: ${bgColor}; color: ${textColor}; border: 2px solid ${borderColor}; font-weight: 700; border-radius: 6px; padding: 6px 8px; cursor: pointer; font-size: 11px; flex: 1; min-width: 100px;">
+                                        <option value="Pendente" ${h.status==='Pendente'?'selected':''}>⏳ Pendente</option>
+                                        <option value="Aprovado" ${h.status==='Aprovado'?'selected':''}>✅ Aprovado</option>
+                                        <option value="Cancelado" ${h.status==='Cancelado'?'selected':''}>❌ Cancelado</option>
+                                    </select>
+                                    <button class="btn" style="background: var(--asb-success); color: white; padding: 4px 6px; height: 26px; font-size: 10px; min-width: 45px; white-space: nowrap;" 
+                                            onclick="salvarStatus(${h.id})" title="Salvar status selecionado">
+                                        💾 OK
+                                    </button>
+                                </div>
+                            </td>
+                            <td class="no-print">
+                                <button class="btn btn-edit" onclick="editOrcHist(${h.id})">EDITAR</button>
+                                <button class="btn btn-del" onclick="excluirOrcamento(${h.id})">DEL</button>
+                            </td></tr>`;
+                    }
+                });
+                console.log('📊 Total de orçamentos mostrados:', totalMostrados);
+            }
+        }
+
+        // MOVIMENTAÇÃO
+        const logTbody = document.getElementById('tbl-log-corpo');
+        if(logTbody) {
+            logTbody.innerHTML = '';
+            console.log('📦 Renderizando movimentações...');
+            console.log('Total de movimentações:', db.movimentacoes ? db.movimentacoes.length : 0);
+            if(db.movimentacoes && db.movimentacoes.length > 0) {
+                console.log('Movimentações:', db.movimentacoes);
+                db.movimentacoes.slice().reverse().forEach((m, idx) => {
+                    console.log(`Movimentação ${idx}:`, m);
+                    logTbody.innerHTML += `<tr><td>${m.data}</td><td>${m.produto}</td><td>${m.qtd}</td><td>${m.destino}</td></tr>`;
+                });
+            } else {
+                console.log('⚠️ Nenhuma movimentação encontrada');
+            }
+        }
+        
+        // USUÁRIOS
+        const userTbody = document.getElementById('tbl-users-corpo');
+        if(userTbody) {
+            userTbody.innerHTML = '';
+            if(db.users) db.users.forEach((u, idx) => {
+                userTbody.innerHTML += `<tr><td>${u.user}</td><td>${u.level}</td><td><button class="btn btn-del" onclick="excluirUsuario(${idx})">DEL</button></td></tr>`;
+            });
+        }
     }
-
-    function mostrarVelocimetroSobreposto() {
-        let ov = document.getElementById('overlay-vel');
-        if (!ov) {
-            ov = document.createElement('div');
-            ov.id = 'overlay-vel';
-            ov.style.cssText = 'position:fixed;bottom:90px;right:10px;z-index:999;background:#1a1a2a;border:3px solid #0079f2;border-radius:16px;padding:14px 18px;text-align:center;min-width:110px;box-shadow:0 4px 20px rgba(0,0,0,0.8);';
-            ov.innerHTML = `<div id="ov-vel" style="font-size:54px;font-weight:bold;color:#fff;line-height:1;">0</div>
-                <div style="font-size:12px;color:#888;font-weight:bold;">KM/H</div>
-                <div id="ov-status" style="font-size:10px;color:#ffea00;margin-top:4px;"></div>
-                <div id="ov-sem" style="font-size:22px;margin-top:5px;">🟢</div>
-                <button onclick="document.getElementById('overlay-vel').remove();overlayAtivo=false;"
-                    style="margin-top:6px;background:#c62828;color:white;border:none;padding:4px 10px;border-radius:4px;font-size:10px;cursor:pointer;">✕</button>`;
-            document.body.appendChild(ov); overlayAtivo=true;
-        } else { ov.remove(); overlayAtivo=false; }
-    }
-
-    function atualizarOverlay() {
-        if (!overlayAtivo) return;
-        const ov = document.getElementById('overlay-vel'); if (!ov) return;
-        document.getElementById('ov-vel').innerText = velocidadeGlobal;
-        document.getElementById('ov-vel').style.color = velocidadeGlobal>limiteGlobal?'#ff1744':velocidadeGlobal>=limiteGlobal*0.9?'#ffea00':'#00e676';
-        document.getElementById('ov-status').innerText = statusTextoGlobal.substring(0,22);
-        document.getElementById('ov-sem').innerText = velocidadeGlobal>limiteGlobal?'🔴':velocidadeGlobal>=limiteGlobal*0.9?'🟡':'🟢';
-    }
-
-    video.addEventListener('leavepictureinpicture', ()=>{ pipAtivo=false; });
-    document.body.addEventListener('click', ()=>{ liberarAudioNavegador(); prepararPip(); });
-
-    checarAutenticacaoExistente();
 </script>
+
+<!-- Modal de Confirmacao -->
+<div id="modal-confirmacao">
+    <div class="modal-box">
+        <p id="modal-msg">Tem certeza?</p>
+        <div class="modal-btns">
+            <button id="modal-btn-sim">SIM, LIMPAR</button>
+            <button id="modal-btn-nao">CANCELAR</button>
+        </div>
+    </div>
+</div>
 </body>
 </html>
+
